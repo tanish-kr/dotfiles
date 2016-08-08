@@ -1,0 +1,15 @@
+[color]
+  ui = auto
+[diff]
+  tool = vimdiff
+[merge]
+  tool = vimdiff
+[difftool]
+  prompt = false
+[mergetool]
+  prompt = false
+[alias]
+  log-dec="log --oneline --graph --stat --no-merges --decorate"
+  log-full="log --graph --stat --name-status --decorate"
+  log-comment="log --oneline --no-merges"
+  tag-info="for-each-ref --sort=-tag --format='%(taggerdate) %(tag) %(subject)' refs/tags"
