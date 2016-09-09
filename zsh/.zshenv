@@ -8,3 +8,4 @@ eval "$(rbenv init -)"
 
 export TERM='xterm-256color'
 alias ls='ls --color=auto'
+alias tree='tree --charset=C'
