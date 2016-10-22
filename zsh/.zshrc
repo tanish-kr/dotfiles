@@ -15,13 +15,16 @@ setopt nonomatch
 setopt interactivecomments
 
 # zshプロンプトにモード表示####################################
+autoload -U colors && colors
 function zle-line-init zle-keymap-select {
   case $KEYMAP in
     vicmd)
-    PROMPT="%{$fg[red]%}[%{$reset_color%}%n@%m/%{$fg_bold[red]%}%c%{$reset_color%}%{$fg[red]%}]\$%{$reset_color%} "
+    # PROMPT="%{$fg[red]%}[%{$reset_color%}%n@%m/%{$fg_bold[red]%}%c%{$reset_color%}%{$fg[red]%}]\$%{$reset_color%} "
+    PROMPT="[%{$fg[magenta]%}%n%{$reset_color%}@%{$fg[cyan]%}%m/%c%{$reset_color%}]%# "
     ;;
     main|viins)
-    PROMPT="%{$fg[red]%}[%{$reset_color%}%n@%m/%{$fg_bold[cyan]%}%c%{$reset_color%}%{$fg[red]%}]%#%{$reset_color%} "
+    # PROMPT="%{$fg[red]%}[%{$reset_color%}%n@%m/%{$fg_bold[cyan]%}%c%{$reset_color%}%{$fg[red]%}]%#%{$reset_color%} "
+    PROMPT="[%{$fg[green]%}%n%{$reset_color%}@%{$fg[cyan]%}%m/%c%{$reset_color%}]%# "
     ;;
   esac
   zle reset-prompt
