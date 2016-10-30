@@ -14,26 +14,41 @@ setopt hist_ignore_space
 setopt nonomatch
 setopt interactivecomments
 
+autoload -U colors && colors
 # zshプロンプトにモード表示####################################
 function zle-line-init zle-keymap-select {
   case $KEYMAP in
     vicmd)
-    PROMPT="%{$fg[red]%}[%{$reset_color%}%n@%m/%{$fg_bold[red]%}%c%{$reset_color%}%{$fg[red]%}]\$%{$reset_color%} "
+    # PROMPT="%{$fg[red]%}[%{$reset_color%}%n%{$fg[red]%}:%~%{$reset_color%}%{$fg[red]%}]%#%{$reset_color%} "
+    PROMPT="[%{$fg[green]%}%n%{$fg[reset_color]%}:%{$fg[red]%}%c%{$reset_color%}]%# "
     ;;
     main|viins)
-    PROMPT="%{$fg[red]%}[%{$reset_color%}%n@%m/%{$fg_bold[cyan]%}%c%{$reset_color%}%{$fg[red]%}]%#%{$reset_color%} "
+    # PROMPT="%{$fg[cyan]%}[%{$reset_color%}%n%{$fg[cyan]%}:%~%{$reset_color%}%{$fg[cyan]%}]%#%{$reset_color%} "
+    PROMPT="[%{$fg[green]%}%n%{$fg[reset_color]%}:%{$fg[cyan]%}%c%{$reset_color%}]%# "
     ;;
   esac
   zle reset-prompt
 }
+
+# タイトル変更
+DISABLE_AUTO_TITLE=true
+case "${TERM}" in
+?term*|rxvt*|screen)
+    precmd() {
+        echo -ne "\033]0;${USER}@${HOST%%.*}:${PWD}\007"
+    }
+    ;;
+esac
+
 zle -N zle-line-init
 zle -N zle-keymap-select
 
-if [ -e /usr/share/terminfo/x/xterm-256color ]; then
-        export TERM='xterm-256color'
-else
-        export TERM='xterm-color'
-fi
+# mac以外での設定
+# if [ -e /usr/share/terminfo/x/xterm-256color ]; then
+#         export TERM='xterm-256color'
+# else
+#         export TERM='xterm-color'
+# fi
 
 autoload -U compinit
 compinit
@@ -45,8 +60,8 @@ export LSCOLORS=exfxcxdxbxegedabagacad
 export LS_COLORS='di=34:ln=35:so=32:pi=33:ex=31:bd=46;34:cd=43;34:su=41;30:sg=46;30:tw=42;30:ow=43;30'
 
 # alias ls="ls -GF"
-alias ls="ls -F --color"
-alias gls="gls --color"
+# alias ls="ls -F --color"
+# alias gls="ls -GF"
 
 zstyle ':completion:*' list-colors 'di=34' 'ln=35' 'so=32' 'ex=31' 'bd=46;34' 'cd=43;34'
 
