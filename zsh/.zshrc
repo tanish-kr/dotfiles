@@ -15,13 +15,16 @@ setopt nonomatch
 setopt interactivecomments
 
 # zshプロンプトにモード表示####################################
+autoload -U colors && colors
 function zle-line-init zle-keymap-select {
   case $KEYMAP in
     vicmd)
-    PROMPT="%{$fg[red]%}[%{$reset_color%}%n@%m/%{$fg_bold[red]%}%c%{$reset_color%}%{$fg[red]%}]\$%{$reset_color%} "
+    # PROMPT="%{$fg[red]%}[%{$reset_color%}%n@%m/%{$fg_bold[red]%}%c%{$reset_color%}%{$fg[red]%}]\$%{$reset_color%} "
+    PROMPT="[%{$fg[magenta]%}%n%{$reset_color%}@%{$fg[cyan]%}%m/%c%{$reset_color%}]%# "
     ;;
     main|viins)
-    PROMPT="%{$fg[red]%}[%{$reset_color%}%n@%m/%{$fg_bold[cyan]%}%c%{$reset_color%}%{$fg[red]%}]%#%{$reset_color%} "
+    # PROMPT="%{$fg[red]%}[%{$reset_color%}%n@%m/%{$fg_bold[cyan]%}%c%{$reset_color%}%{$fg[red]%}]%#%{$reset_color%} "
+    PROMPT="[%{$fg[green]%}%n%{$reset_color%}@%{$fg[cyan]%}%m/%c%{$reset_color%}]%# "
     ;;
   esac
   zle reset-prompt
@@ -38,6 +41,9 @@ fi
 autoload -U compinit
 compinit
 
+#allow tab completion in the middle of a word
+setopt COMPLETE_IN_WORD
+
 export LSCOLORS=exfxcxdxbxegedabagacad
 export LS_COLORS='di=34:ln=35:so=32:pi=33:ex=31:bd=46;34:cd=43;34:su=41;30:sg=46;30:tw=42;30:ow=43;30'
 
@@ -46,3 +52,16 @@ alias ls="ls -F --color"
 alias gls="gls --color"
 
 zstyle ':completion:*' list-colors 'di=34' 'ln=35' 'so=32' 'ex=31' 'bd=46;34' 'cd=43;34'
+
+# zhs history setting
+setopt APPEND_HISTORY
+export HISTFILE=${HOME}/.zsh_history
+export HISTSIZE=1000
+export SAVEHIST=100000
+setopt hist_ignore_dups
+setopt EXTENDED_HISTORY
+## for sharing history between zsh processes
+setopt INC_APPEND_HISTORY
+setopt SHARE_HISTORY
+
+function history-all { history -E 1 }
