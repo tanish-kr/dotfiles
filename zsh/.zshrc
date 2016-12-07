@@ -64,6 +64,8 @@ setopt EXTENDED_HISTORY
 setopt INC_APPEND_HISTORY
 setopt SHARE_HISTORY
 
+function history-all { history -E 1 }
+
 agent="$HOME/.ssh/ssh_auth_sock"
 if [ -S "$SSH_AUTH_SOCK" ]; then
     case $SSH_AUTH_SOCK in
@@ -92,5 +94,3 @@ fi
 #   # ショートカットキー割り当て
 #   bindkey "^[s" update_ssh_auth_sock
 # fi
-
-function history-all { history -E 1 }
