@@ -2,6 +2,20 @@ if [ -f ~/.bashrc ]; then
   source ~/.bashrc
 fi
 
+# PATHの順番に気をつけないと行けないのでこちらに設定
+PATH=$HOME/bin:$PATH
+
+# anyenvがあればそれだけでいい
+if [ -e $HOME/.anyenv ]; then
+  export PATH="$HOME/.anyenv/bin:$PATH"
+  eval "$(anyenv init -)"
+else
+  if [ -e $HOME/.rbenv ]; then
+    export PATH="$HOME/.rbenv/bin:$PATH"
+    eval "$(rbenv init -)"
+  fi
+fi
+
 bindkey -v
 # bindkey -e
 bindkey "^R" history-incremental-search-backward
