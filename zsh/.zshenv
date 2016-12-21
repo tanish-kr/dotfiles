@@ -1,5 +1,5 @@
 export TERM='xterm-256color'
-alias ls='ls --color=auto'
+# alias ls='ls --color=auto'
 alias tree='tree --charset=C'
 
 # tmux pbcopy alias

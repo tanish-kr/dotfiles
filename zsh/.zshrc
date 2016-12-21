@@ -46,11 +46,11 @@ function zle-line-init zle-keymap-select {
 zle -N zle-line-init
 zle -N zle-keymap-select
 
-if [ -e /usr/share/terminfo/x/xterm-256color ]; then
-        export TERM='xterm-256color'
-else
-        export TERM='xterm-color'
-fi
+# if [ -e /usr/share/terminfo/x/xterm-256color ] || [[ $OSTYPE == "*drawin" ]]; then
+#   export TERM='xterm-256color'
+# else
+#   export TERM='xterm-color'
+# fi
 
 autoload -U compinit
 compinit
@@ -62,7 +62,7 @@ export LSCOLORS=exfxcxdxbxegedabagacad
 export LS_COLORS='di=34:ln=35:so=32:pi=33:ex=31:bd=46;34:cd=43;34:su=41;30:sg=46;30:tw=42;30:ow=43;30'
 
 # alias ls="ls -GF"
-alias ls="ls -F --color"
+# alias ls="ls -F --color"
 alias gls="gls --color"
 
 zstyle ':completion:*' list-colors 'di=34' 'ln=35' 'so=32' 'ex=31' 'bd=46;34' 'cd=43;34'
