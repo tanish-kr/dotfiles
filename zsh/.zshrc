@@ -2,6 +2,20 @@ if [ -f ~/.bashrc ]; then
   source ~/.bashrc
 fi
 
+# PATHの順番に気をつけないと行けないのでこちらに設定
+PATH=$HOME/bin:$PATH
+
+# anyenvがあればそれだけでいい
+if [ -e $HOME/.anyenv ]; then
+  export PATH="$HOME/.anyenv/bin:$PATH"
+  eval "$(anyenv init -)"
+else
+  if [ -e $HOME/.rbenv ]; then
+    export PATH="$HOME/.rbenv/bin:$PATH"
+    eval "$(rbenv init -)"
+  fi
+fi
+
 bindkey -v
 # bindkey -e
 bindkey "^R" history-incremental-search-backward
@@ -44,11 +58,11 @@ esac
 zle -N zle-line-init
 zle -N zle-keymap-select
 
-# mac以外での設定
-# if [ -e /usr/share/terminfo/x/xterm-256color ]; then
-#         export TERM='xterm-256color'
+
+# if [ -e /usr/share/terminfo/x/xterm-256color ] || [[ $OSTYPE == "*drawin" ]]; then
+#   export TERM='xterm-256color'
 # else
-#         export TERM='xterm-color'
+#   export TERM='xterm-color'
 # fi
 
 autoload -U compinit
@@ -78,3 +92,32 @@ setopt INC_APPEND_HISTORY
 setopt SHARE_HISTORY
 
 function history-all { history -E 1 }
+
+agent="$HOME/.ssh/ssh_auth_sock"
+if [ -S "$SSH_AUTH_SOCK" ]; then
+    case $SSH_AUTH_SOCK in
+    /tmp/*/agent.[0-9]*)
+        # ln -snf "$SSH_AUTH_SOCK" $agent && export SSH_AUTH_SOCK=$agent
+        export SSH_AUTH_SOCK=$agent
+    esac
+elif [ -S $agent ]; then
+    export SSH_AUTH_SOCK=$agent
+else
+    echo "no ssh-agent"
+fi
+
+# if [ -n "${TMUX}" ]; then
+#   # 既存のシェルの SSH_AUTH_SOCK を更新
+#   function update_ssh_auth_sock() {
+#     NEWVAL=`tmux show-environment | grep "^SSH_AUTH_SOCK" | cut -d"=" -f2`
+#     if [ -n "${NEWVAL}" ]; then
+#       SSH_AUTH_SOCK=${NEWVAL}
+#     fi
+#   }
+#
+#   # widget 化する
+#   zle -N update_ssh_auth_sock
+#
+#   # ショートカットキー割り当て
+#   bindkey "^[s" update_ssh_auth_sock
+# fi
