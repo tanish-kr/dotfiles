@@ -19,6 +19,8 @@ fi
 bindkey -v
 # bindkey -e
 bindkey "^R" history-incremental-search-backward
+bindkey -M viins '^f' vi-cmd-mode
+
 autoload -U compinit; compinit
 setopt auto_pushd
 setopt pushd_ignore_dups
@@ -30,7 +32,6 @@ setopt interactivecomments
 
 autoload -U colors && colors
 # zshプロンプトにモード表示####################################
-autoload -U colors && colors
 function zle-line-init zle-keymap-select {
   case $KEYMAP in
     vicmd)
