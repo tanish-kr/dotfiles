@@ -4,7 +4,7 @@ export TERM='xterm-256color'
 alias tree='tree --charset=C'
 
 # tmux pbcopy alias
-if [ `which pbcopy` ] && [ `which tmux` ] && [[ $OSTYPE != "drawin"* ]]; then
+if [[ `which pbcopy` ]] && [[ `which tmux` ]]; then
   alias tmcopy='tmux save-buffer - | pbcopy'
 fi
 
