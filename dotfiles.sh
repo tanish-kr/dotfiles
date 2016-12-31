@@ -17,7 +17,7 @@ install() {
 }
 
 set() {
-  for file_name in $(dotfiles); do
+  for file_name in $dotfiles; do
     ln -svf $file_name ~
     echo "Set link to ${file_name}."
   done
