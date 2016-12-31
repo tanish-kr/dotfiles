@@ -1,6 +1,6 @@
 #!/bin/bash
 
-dotfiles=$(find `pwd` -mindepth 1 -type f \
+dotfiles=($(find `pwd` -mindepth 1 -type f \
     -name "*.*" \
     -not -name "*.swp" \
     -not -name "*.swo" \
@@ -9,16 +9,30 @@ dotfiles=$(find `pwd` -mindepth 1 -type f \
     -not -name "dotfiles.sh" \
     -not -name "*.md" \
     -not -name "*.gitkeep" \
-    -not -path "*.git/*")
+    -not -path "*.git/*" \
+    -not -path "*/org/*"))
+dotfiles+=("$(pwd)/ssh/rc")
+
+home_dotsfile=($(find $HOME -maxdepth 1 -regex ".*\/\..*" \
+    -not -type d \
+    -not -name "*.DS_Store" \
+    -not -name "*.swp" \
+    -not -name "*.swo"))
+home_dotsfile+=("$HOME/.ssh/rc")
 
 install() {
   backup
   set
+  git submodule update --init --recursive
 }
 
 set() {
-  for file_name in $dotfiles; do
-    ln -svf $file_name ~
+  for file_name in "${dotfiles[@]}"; do
+    if [[ $file_name =~ "ssh" ]]; then
+      ln -svf $file_name $HOME/.ssh
+    else
+      ln -svf $file_name $HOME
+    fi
     echo "Set link to ${file_name}."
   done
 }
@@ -38,15 +52,14 @@ delete() {
 }
 
 backup() {
-  for file_name in $(find $HOME -maxdepth 1 -type l); do
+  for file_name in "${home_dotsfile[@]}"; do
     cp -RH $file_name org/
     echo "Backup to ${file_name}."
   done
 }
 
 list() {
-  home_dotsfile=$(find $HOME -maxdepth 1 -type l)
-  for file_name in $home_dotsfile; do
+  for file_name in "${home_dotsfile[@]}"; do
     link_path=$(readlink $file_name)
     if [ $(contains "${dotfiles[@]}" "$link_path") == "y" ]; then
       echo "$file_name"
@@ -67,6 +80,19 @@ contains() {
   return 1
 }
 
+debug() {
+  echo "dotfiles"
+  # echo "$dotfiles"
+  for file_name in "${dotfiles[@]}"; do
+    echo $file_name
+  done
+  echo "home_dotfiles"
+  # echo ${home_dotsfile[@]}
+  for file_name in "${home_dotsfile[@]}"; do
+    echo $file_name
+  done
+}
+
 help() {
   echo "Useage: $0 <install|update|delete|backup|list|help>"
   echo "  - install|-i:     Install dotfiles."
@@ -77,6 +103,10 @@ help() {
 }
 
 case $1 in
+  debug)
+    debug
+    exit 0
+    ;;
   install|-i)
     install
     exit 0
