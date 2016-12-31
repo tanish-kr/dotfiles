@@ -77,6 +77,8 @@ help() {
 
 case $1 in
   install|-i)
+    install
+    exit 0
     ;;
   set|-u)
     set
