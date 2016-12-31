@@ -26,7 +26,7 @@ set() {
 unset() {
   for file_name in $(list); do
     unlink $file_name
-    echo "Set unlink to ${file_name}."
+    echo "Unlink to ${file_name}."
   done
 }
 
