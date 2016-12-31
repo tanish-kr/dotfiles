@@ -38,7 +38,7 @@ delete() {
 }
 
 backup() {
-  for file_name in $(list); do
+  for file_name in $(find $HOME -maxdepth 1 -type l); do
     cp -RH $file_name org/
     echo "Backup to ${file_name}."
   done
