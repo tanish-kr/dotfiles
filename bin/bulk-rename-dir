@@ -1,0 +1,8 @@
+#!/bin/bash
+_dir=($(find $1 -type d -print))
+
+for dir_name in "${_dir[@]}"; do
+  if [ $dir_name != $1 ]; then
+    echo $dir_name
+  fi
+done

@@ -1,0 +1,2 @@
+#!/bin/bash
+sudo defaults write /System/Library/LaunchDaemons/com.apple.backupd-auto StartInterval -integer $1

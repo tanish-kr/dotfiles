@@ -1,0 +1,2 @@
+#!/bin/bash
+find $1 -type f -name "$2" -print | xargs sed -i -e "s/$3/$4/g"

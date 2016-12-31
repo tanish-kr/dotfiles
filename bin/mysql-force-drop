@@ -1,0 +1,4 @@
+#!/bin/bash
+mysql -u root -p$1 -e 'SHOW DATABASES' | \
+grep -v 'mysql' | grep -v 'information_schema' | grep -v 'Database' | \
+xargs -I "@@" mysql -u root -p$1 -e "DROP database \`@@\`"

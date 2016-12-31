@@ -11,6 +11,7 @@ dotfiles=($(find `pwd` -mindepth 1 -maxdepth 2 -regex ".*\/\..*" \
     -not -path "*/.git/*" \
     -not -path "*/org/*"))
 dotfiles+=("$(pwd)/vim/.vim")
+dotfiles+=($(pwd)/bin/*)
 dotfiles+=("$(pwd)/ssh/rc")
 
 home_dotsfile=($(find $HOME -maxdepth 1 -regex ".*\/\..*" \
@@ -19,6 +20,7 @@ home_dotsfile=($(find $HOME -maxdepth 1 -regex ".*\/\..*" \
     -not -name "*.swp" \
     -not -name "*.swo"))
 home_dotsfile+=("$HOME/vim/.vim")
+home_dotsfile+=($HOME/bin/*)
 home_dotsfile+=("$HOME/.ssh/rc")
 
 install() {
@@ -31,6 +33,8 @@ set() {
   for file_name in "${dotfiles[@]}"; do
     if [[ $file_name =~ "ssh" ]]; then
       ln -svf $file_name $HOME/.ssh
+    elif [[ $file_name =~ "bin" ]]; then
+      ln -svf $file_name $HOME/bin
     else
       ln -svf $file_name $HOME
     fi

@@ -1,0 +1,2 @@
+#!/bin/bash
+openssl enc -d -in <(echo $1) -aes-256-cbc -a -salt -base64 -pass pass:$2

@@ -1,0 +1,27 @@
+#!/bin/bash
+FEATURE_BRANCH=($(git branch | grep feature))
+
+for branch in "${FEATURE_BRANCH[@]}"; do
+  # log check
+  logs=$(git log -n 1 --pretty=format:"%cn,%cd,%s" --date=short --no-merges ${branch})
+  echo $branch, $logs
+
+  # removed?
+  echo -n "${branch} is removed? [Y/N] : "
+  while read answer; do
+    case $answer in
+      [yY] )
+        git branch -d $branch
+        git push origin :$branch
+        break ;;
+      [nN] )
+        echo "Not remove ${branch}"
+        break ;;
+      [qQ] )
+        echo "Quit"
+        exit 0 ;;
+      *)
+        echo -n "${branch} is removed? [Y/N] : " ;;
+    esac
+  done
+done

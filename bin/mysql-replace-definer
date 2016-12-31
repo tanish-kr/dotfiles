@@ -1,0 +1,4 @@
+#!/bin/bash
+sed -i -e '/^\/\*!50013 DEFINER=/d' $1
+sed -i -E 's/CREATE DEFINER=.+ (FUNCTION|PROCEDURE)/CREATE \1/g' $1
+sed -i -E 's/\/\*\!50020 DEFINER=`.*`@`localhost`\*\/ //g' $1
