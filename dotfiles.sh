@@ -70,7 +70,8 @@ contains() {
 help() {
   echo "Useage: $0 <install|update|delete|backup|list|help>"
   echo "  - install|-i:     Install dotfiles."
-  echo "  - update|-u:      Update dotfiles."
+  echo "  - set|-s:         Set dotfiles."
+  echo "  - unset|-u:       Un set dotfiles."
   echo "  - delete|-d:      Delete a dotfiles."
   echo "  - list|-l:        List dotfiles."
 }
@@ -80,11 +81,11 @@ case $1 in
     install
     exit 0
     ;;
-  set|-u)
+  set|-s)
     set
     exit 0
     ;;
-  unset)
+  unset|-u)
     unset
     exit 0
     ;;
