@@ -13,3 +13,6 @@
   log-full="log --graph --stat --name-status --decorate"
   log-comment="log --oneline --no-merges"
   tag-info="for-each-ref --sort=-tag --format='%(taggerdate) %(tag) %(subject)' refs/tags"
+[user]
+  name = kitaro-tn
+  email = tora.1986.tatsu@gmail.com
