@@ -1,18 +1,16 @@
 #!/bin/bash
 
-dotfiles=($(find `pwd` -mindepth 1 -type f \
-    -name "*.*" \
-    -not -name "*~" \
-    -not -name "*.swp" \
-    -not -name "*.swo" \
+dotfiles=($(find `pwd` -mindepth 1 -maxdepth 2 -regex ".*\/\..*" \
+    -not -type d \
     -not -name "*.DS_Store" \
     -not -name "*.gitignore" \
     -not -name "*.gitmodules" \
-    -not -name "dotfiles.sh" \
-    -not -name "*.md" \
-    -not -name "*.gitkeep" \
-    -not -path "*.git/*" \
+    -not -name "*.git" \
+    -not -name "*.swp" \
+    -not -name "*.swo" \
+    -not -path "*/.git/*" \
     -not -path "*/org/*"))
+dotfiles+=("$(pwd)/vim/.vim")
 dotfiles+=("$(pwd)/ssh/rc")
 
 home_dotsfile=($(find $HOME -maxdepth 1 -regex ".*\/\..*" \
@@ -20,6 +18,7 @@ home_dotsfile=($(find $HOME -maxdepth 1 -regex ".*\/\..*" \
     -not -name "*.DS_Store" \
     -not -name "*.swp" \
     -not -name "*.swo"))
+home_dotsfile+=("$HOME/vim/.vim")
 home_dotsfile+=("$HOME/.ssh/rc")
 
 install() {
