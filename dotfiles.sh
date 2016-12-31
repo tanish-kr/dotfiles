@@ -2,10 +2,12 @@
 
 dotfiles=($(find `pwd` -mindepth 1 -type f \
     -name "*.*" \
+    -not -name "*~" \
     -not -name "*.swp" \
     -not -name "*.swo" \
     -not -name "*.DS_Store" \
     -not -name "*.gitignore" \
+    -not -name "*.gitmodules" \
     -not -name "dotfiles.sh" \
     -not -name "*.md" \
     -not -name "*.gitkeep" \
