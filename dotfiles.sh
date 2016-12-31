@@ -78,11 +78,16 @@ help() {
 case $1 in
   install|-i)
     ;;
-  update|-u)
-    update
+  set|-u)
+    set
+    exit 0
+    ;;
+  unset)
+    unset
     exit 0
     ;;
   delete|-d)
+    delete
     exit 0
     ;;
   backup|-b)
