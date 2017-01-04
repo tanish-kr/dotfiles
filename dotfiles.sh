@@ -11,6 +11,7 @@ dotfiles=($(find `pwd` -mindepth 1 -maxdepth 2 -regex ".*\/\..*" \
     -not -path "*/.git/*" \
     -not -path "*/org/*"))
 dotfiles+=("$(pwd)/vim/.vim")
+dotfiles+=("$(pwd)/emacs/.emacs.d")
 dotfiles+=($(pwd)/bin/*)
 dotfiles+=("$(pwd)/ssh/rc")
 
@@ -19,7 +20,8 @@ home_dotsfile=($(find $HOME -maxdepth 1 -regex ".*\/\..*" \
     -not -name "*.DS_Store" \
     -not -name "*.swp" \
     -not -name "*.swo"))
-home_dotsfile+=("$HOME/vim/.vim")
+home_dotsfile+=("$HOME/.vim")
+home_dotsfile+=("$HOME/.emacs.d")
 home_dotsfile+=($HOME/bin/*)
 home_dotsfile+=("$HOME/.ssh/rc")
 
