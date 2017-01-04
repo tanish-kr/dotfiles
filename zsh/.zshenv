@@ -12,6 +12,7 @@ alias gls='ls -laGF'
 alias tree='tree --charset=C'
 
 alias tmux="TERM=screen-256color-bce tmux"
+alias spacemacs="emacs --insecure"
 
 # tmux ssh-agent
 agent="$HOME/tmp/ssh-agent-$USER"
