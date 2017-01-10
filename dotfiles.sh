@@ -27,8 +27,8 @@ home_dotsfile+=("$HOME/.ssh/rc")
 
 install() {
   backup
-  set
   git submodule update --init --recursive
+  set
 }
 
 set() {
