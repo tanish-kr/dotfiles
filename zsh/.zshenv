@@ -3,7 +3,11 @@ export TERM='xterm-256color'
 
 # tmux pbcopy alias
 if [[ `which pbcopy` ]] && [[ `which tmux` ]]; then
-  alias tmcopy='tmux save-buffer - | pbcopy'
+  if [ "$(uname)" = 'Darwin' ]; then
+    alias tmcopy='tmux save-buffer - | pbcopy'
+  else
+    alias tmcopy='tmux save-buffer - | srv-pbcopy'
+  fi
 fi
 
 if [ "$(uname)" = 'Darwin' ]; then
