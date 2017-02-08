@@ -36,11 +36,19 @@ function zle-line-init zle-keymap-select {
   case $KEYMAP in
     vicmd)
     # PROMPT="%{$fg[red]%}[%{$reset_color%}%n%{$fg[red]%}:%~%{$reset_color%}%{$fg[red]%}]%#%{$reset_color%} "
-    PROMPT="[%{$fg[green]%}%n%{$fg[reset_color]%}:%{$fg[red]%}/%c%{$reset_color%}]%# "
+      if [ "$(uname)" = 'Darwin' ]; then
+        PROMPT="[%{$fg[green]%}%n%{$fg[reset_color]%}:%{$fg[red]%}/%c%{$reset_color%}]%# "
+      else
+        PROMPT="[%{$fg[green]%}%n@%m%{$fg[reset_color]%}:%{$fg[red]%}/%c%{$reset_color%}]%# "
+      fi
     ;;
     main|viins)
     # PROMPT="%{$fg[cyan]%}[%{$reset_color%}%n%{$fg[cyan]%}:%~%{$reset_color%}%{$fg[cyan]%}]%#%{$reset_color%} "
-    PROMPT="[%{$fg[green]%}%n%{$fg[reset_color]%}:%{$fg[cyan]%}/%c%{$reset_color%}]%# "
+      if [ "$(uname)" = 'Darwin' ]; then
+        PROMPT="[%{$fg[green]%}%n%{$fg[reset_color]%}:%{$fg[cyan]%}/%c%{$reset_color%}]%# "
+      else
+        PROMPT="[%{$fg[green]%}%n@%m%{$fg[reset_color]%}:%{$fg[cyan]%}/%c%{$reset_color%}]%# "
+      fi
     ;;
   esac
   zle reset-prompt
