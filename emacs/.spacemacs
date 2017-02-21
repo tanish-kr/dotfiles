@@ -130,14 +130,16 @@ values."
    ;; List of themes, the first of the list is loaded when spacemacs starts.
    ;; Press <SPC> T n to cycle to the next theme in the list (works great
    ;; with 2 themes variants, one dark and one light)
-   dotspacemacs-themes '(spacemacs-dark
-                         spacemacs-light)
+   dotspacemacs-themes '(monokai)
+   ;; dotspacemacs-themes '(spacemacs-dark
+   ;;                       spacemacs-light)
    ;; If non nil the cursor color matches the state color in GUI Emacs.
    dotspacemacs-colorize-cursor-according-to-state t
    ;; Default font, or prioritized list of fonts. `powerline-scale' allows to
    ;; quickly tweak the mode-line size to make separators look not too crappy.
-   dotspacemacs-default-font '("Source Code Pro"
-                               :size 13
+   ;; dotspacemacs-default-font '("Source Code Pro"
+   dotspacemacs-default-font '("Ricty Diminished Bold"
+                               :size 14
                                :weight normal
                                :width normal
                                :powerline-scale 1.1)
@@ -303,7 +305,16 @@ layers configuration.
 This is the place where most of your configurations should be done. Unless it is
 explicitly specified that a variable should be set before a package is loaded,
 you should place your code here."
+  ;; Line number
   (global-linum-mode)
+
+  ;; Indent highlight
+  ;; (global-highlight-indentation-mode)
+  ;; (global-highlight-indentation-current-column-mode)
+  (spacemacs/toggle-indent-guide-on)
+  (spacemacs/toggle-highlight-indentation-on)
+  ;; (set-face-background 'highlight-indentation-face "#e3e3d3")
+  ;; (set-face-background 'highlight-indentation-current-column-face "#c3b3b3")
   )
 
 ;; Do not write anything past this comment. This is where Emacs will
