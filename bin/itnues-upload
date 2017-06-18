@@ -1,0 +1,2 @@
+#!/bin/bash
+rsync -avzu --delete ~/Music/iTunes/ /Volumes/Multimedia/Music/iTunes/ --exclude=".DS_Store" --exclude="iTunes Media" --exclude="Mobile Applications" --exclude="Previous iTunes Libraries"  --exclude="sentinel"
