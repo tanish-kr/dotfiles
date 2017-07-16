@@ -13,8 +13,14 @@
   log-full="log --graph --stat --name-status --decorate"
   log-comment="log --oneline --no-merges"
   tag-info="for-each-ref --sort=-tag --format='%(taggerdate) %(tag) %(subject)' refs/tags"
+  tree="log --graph --decorate --all --pretty=oneline --abbrev-commit"
   sts="status"
   co="checkout"
+  brc="branch"
+  cmt="commit"
+  cl="clone"
+  fh="fetch"
+  chp="cherry-pick"
 [user]
   name = kitaro-tn
   email = tora.1986.tatsu@gmail.com
