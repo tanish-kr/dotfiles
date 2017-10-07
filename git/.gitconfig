@@ -16,7 +16,7 @@
   tree="log --graph --decorate --all --pretty=oneline --abbrev-commit"
   sts="status"
   co="checkout"
-  brc="branch"
+  br="branch"
   cmt="commit"
   cl="clone"
   fh="fetch"
