@@ -13,8 +13,13 @@
   log-full="log --graph --stat --name-status --decorate"
   log-comment="log --oneline --no-merges"
   tag-info="for-each-ref --sort=-tag --format='%(taggerdate) %(tag) %(subject)' refs/tags"
+  tree="log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative"
   sts="status"
+  sth="stash"
   co="checkout"
+  br="branch"
 [user]
-  name = kitaro-tn
-  email = tora.1986.tatsu@gmail.com
+  name = tatsunori-nishikori
+  email = t.nishikori@cchan.tv
+[core]
+	excludesFile = /Users/t_nishikori/.gitignore_global

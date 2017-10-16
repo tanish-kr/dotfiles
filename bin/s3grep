@@ -1,0 +1,14 @@
+#!/bin/bash
+ 
+S3_BUCKET=$1
+S3_KEY_PREFIX=$2
+GREP_ARG=${@:3}
+ 
+# ループ時に Ctrl + C を入力された際に即時終了するようにtrapしておく。
+trap 'exit' 2
+ 
+s3_key_list=`aws s3api list-objects-v2 --bucket ${S3_BUCKET} --prefix ${S3_KEY_PREFIX} --query 'Contents[].Key' --output text`
+echo $s3_key_list
+for s3_key in ${s3_key_list}; do
+  aws s3 cp s3://${S3_BUCKET}/${s3_key} - | zgrep ${GREP_ARG}
+done

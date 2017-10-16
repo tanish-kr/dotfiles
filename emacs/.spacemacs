@@ -78,6 +78,8 @@ This function is called at the very startup of Spacemacs initialization
 before layers configuration.
 You should not put any user code in there besides modifying the variable
 values."
+   ;; show whitespace
+  (setq-default spacemacs-show-trailing-whitespace nil)
   ;; This setq-default sexp is an exhaustive list of all the supported
   ;; spacemacs settings.
   (setq-default

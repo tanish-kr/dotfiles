@@ -21,3 +21,8 @@ alias tree='tree --charset=C'
 
 alias tmux="TERM=screen-256color-bce tmux"
 alias spacemacs="emacs --insecure"
+alias nonmacs="emacs -q"
+
+if [ -e "/Applications/MacVim.app/Contents/MacOS/Vim" ]; then
+  alias vim='/Applications/MacVim.app/Contents/MacOS/Vim'
+fi
