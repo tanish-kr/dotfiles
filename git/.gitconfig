@@ -18,6 +18,10 @@
   sth="stash"
   co="checkout"
   br="branch"
+  cmt="commit"
+  cl="clone"
+  fh="fetch"
+  chp="cherry-pick"
 [user]
   name = tatsunori-nishikori
   email = t.nishikori@cchan.tv

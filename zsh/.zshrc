@@ -9,6 +9,9 @@ PATH=$HOME/bin:$PATH
 if [ -e $HOME/.anyenv ]; then
   export PATH="$HOME/.anyenv/bin:$PATH"
   eval "$(anyenv init -)"
+  if [ -e $HOME/.anyenv/envs/pyenv/plugins/pyenv-virtualenv ]; then
+    eval "$(pyenv virtualenv-init -)"
+  fi
 else
   if [ -e $HOME/.rbenv ]; then
     export PATH="$HOME/.rbenv/bin:$PATH"
