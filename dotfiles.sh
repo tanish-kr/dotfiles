@@ -12,6 +12,7 @@ dotfiles=($(find `pwd` -mindepth 1 -maxdepth 2 -regex ".*\/\..*" \
     -not -path "*/org/*"))
 dotfiles+=("$(pwd)/vim/.vim")
 dotfiles+=("$(pwd)/pip/.pip")
+dotfiles+=("$(pwd)/tmux/.tmux")
 dotfiles+=("$(pwd)/emacs/.emacs.d")
 dotfiles+=($(pwd)/bin/*)
 dotfiles+=("$(pwd)/ssh/rc")
