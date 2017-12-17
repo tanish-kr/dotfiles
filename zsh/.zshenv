@@ -25,3 +25,8 @@ alias spacemacs="emacs --insecure"
 # before intall jman @see http://tukaikta.blog135.fc2.com/blog-entry-224.html
 alias man='env LANG=C man'
 alias jman='env LANG=ja_JP.UTF-8 man'
+alias nonmacs="emacs -q"
+
+if [ -e "/Applications/MacVim.app/Contents/MacOS/Vim" ]; then
+  alias vim='/Applications/MacVim.app/Contents/MacOS/Vim'
+fi
