@@ -30,3 +30,7 @@ fi
 # before intall jman @see http://tukaikta.blog135.fc2.com/blog-entry-224.html
 alias man='env LANG=C man'
 alias jman='env LANG=ja_JP.UTF-8 man'
+
+# curl option
+alias curlheader='curl -D - -s -o /dev/null'
+alias curlcode="curl -LI -o /dev/null -w '%{http_code}\n' -s"
