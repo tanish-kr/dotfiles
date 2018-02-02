@@ -16,6 +16,7 @@ dotfiles+=("$(pwd)/tmux/.tmux")
 dotfiles+=("$(pwd)/emacs/.emacs.d")
 dotfiles+=($(pwd)/bin/*)
 dotfiles+=("$(pwd)/ssh/rc")
+dotfiles+=("$(pwd)/nvim")
 
 home_dotsfile=($(find $HOME -maxdepth 1 -regex ".*\/\..*" \
     -not -type d \
@@ -26,6 +27,7 @@ home_dotsfile+=("$HOME/.vim")
 home_dotsfile+=("$HOME/.emacs.d")
 home_dotsfile+=($HOME/bin/*)
 home_dotsfile+=("$HOME/.ssh/rc")
+home_dotsfile+=("$(pwd)/nvim")
 
 install() {
   backup
@@ -39,6 +41,13 @@ set() {
       ln -svf $file_name $HOME/.ssh
     elif [[ $file_name =~ "bin" ]]; then
       ln -svf $file_name $HOME/bin
+    elif [[ $file_name =~ "nvim" ]]; then
+      if [ -e $HOME/.config ]; then
+        ln -svf $file_name $HOME/.config/nvim
+      else
+        mkdir $HOME/.config
+        ln -svf $file_name $HOME/.config/nvim
+      fi
     else
       ln -svf $file_name $HOME
     fi
