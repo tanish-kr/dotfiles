@@ -17,6 +17,7 @@ dotfiles+=("$(pwd)/emacs/.emacs.d")
 dotfiles+=($(pwd)/bin/*)
 dotfiles+=("$(pwd)/ssh/rc")
 dotfiles+=("$(pwd)/nvim")
+dotfiles+=("$(pwd)/vscode/*.json")
 
 home_dotsfile=($(find $HOME -maxdepth 1 -regex ".*\/\..*" \
     -not -type d \
@@ -28,6 +29,11 @@ home_dotsfile+=("$HOME/.emacs.d")
 home_dotsfile+=($HOME/bin/*)
 home_dotsfile+=("$HOME/.ssh/rc")
 home_dotsfile+=("$(pwd)/nvim")
+if [ "$(uname)" == 'Darwin' ]; then
+  home_dotsfile+="$HOME/Library/Application Support/Code/User/*.json"
+elif [ "$(expr substr $(uname -s) 1 5)" == 'Linux']; then
+  home_dotsfile+="$HOME/.config/Code/User/*.json"
+fi
 
 install() {
   backup
@@ -47,6 +53,12 @@ set() {
       else
         mkdir $HOME/.config
         ln -svf $file_name $HOME/.config/nvim
+      fi
+    elif [[ $file_name =~ "vscode" ]]; then
+      if [ "$(uname)" == 'Darwin' ]; then
+        ln -svf $file_name "$HOME/Library/Application Support/Code/User"
+      elif [ "$(expr substr $(uname -s) 1 5)" == 'Linux']; then
+        ln -svf $file_name "$HOME/.config/Code/User"
       fi
     else
       ln -svf $file_name $HOME

@@ -1,0 +1,27 @@
+{
+    "workbench.colorTheme": "Monokai",
+    "terminal.external.osxExec": "iTerm.app",
+    "workbench.startupEditor": "newUntitledFile",
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": false,
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/*.swp": true,
+        "**/*.gitkeep": true,
+        "**/*.keep": true,
+        "**/.DS_Store": true
+    },
+    "diffEditor.ignoreTrimWhitespace": false,
+    "files.trimTrailingWhitespace": true,
+    "editor.renderWhitespace": "boundary",
+    "editor.scrollBeyondLastLine": false,
+    "vim.useSystemClipboard": true,
+    "vim.useCtrlKeys": true,
+    "extensions.ignoreRecommendations": false,
+    "editor.fontFamily": "Menlo, Monaco, 'Courier New', monospace",
+    "editor.fontSize": 13,
+    "terminal.integrated.fontSize": 13
+}
