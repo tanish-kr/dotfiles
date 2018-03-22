@@ -11,6 +11,7 @@ set output-meta on
 
 # タブ補完時、大文字小文字無視
 set completion-ignore-case on
+TAB: complete
 
 # コンソールの横幅をあふれたとき自動スクロール
 set horizontal-scroll-mode on
