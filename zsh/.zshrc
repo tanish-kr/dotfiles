@@ -133,3 +133,8 @@ fi
 #   # ショートカットキー割り当て
 #   bindkey "^[s" update_ssh_auth_sock
 # fi
+
+# python startup
+if [ -e ~/.pystartup ]; then
+  export PYTHONSTARTUP=~/.pystartup
+fi
