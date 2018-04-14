@@ -138,3 +138,6 @@ fi
 if [ -e ~/.pystartup ]; then
   export PYTHONSTARTUP=~/.pystartup
 fi
+
+# esc 遅延
+KEYTIMEOUT=1

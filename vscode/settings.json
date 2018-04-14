@@ -33,5 +33,6 @@
             "before": ["<C-f>"],
             "after": ["<Esc>"]
         }
-    ]
+    ],
+    "ruby.rubocop.onSave": false
 }
