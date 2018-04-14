@@ -8,7 +8,7 @@ PATH=$HOME/bin:$PATH
 # anyenvがあればそれだけでいい
 if [ -e $HOME/.anyenv ]; then
   export PATH="$HOME/.anyenv/bin:$PATH"
-  eval "$(anyenv init -)"
+  eval "$(anyenv init - zsh)"
   if [ -e $HOME/.anyenv/envs/pyenv/plugins/pyenv-virtualenv ]; then
     eval "$(pyenv virtualenv-init -)"
   fi
