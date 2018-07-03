@@ -1,2 +1,2 @@
 #!/bin/bash
-find -name "*.swp" -o -name "*.swo"
+find $1 -name "*.swp" -o -name "*.swo"
