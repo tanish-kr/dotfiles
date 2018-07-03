@@ -140,3 +140,5 @@ if [ -e ~/.pystartup ]; then
 fi
 
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
+# esc 遅延
+KEYTIMEOUT=1
