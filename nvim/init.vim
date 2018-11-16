@@ -13,7 +13,7 @@ set smarttab
 "行番号
 set number
 "ペーストモード
-set paste
+" set paste
 
 "クリップボード設定
 "" ビジュアルモードで選択したテキストをクリップボードに入れる

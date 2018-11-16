@@ -89,7 +89,7 @@
     "when": "terminalFocus"
   },
   {
-    "key": "shift+0",
+    "key": "shift+space 0",
     "command": "workbench.action.terminal.scrollToTop",
     "when": "terminalFocus"
   },
