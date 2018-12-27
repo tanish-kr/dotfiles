@@ -34,5 +34,19 @@
             "after": ["<Esc>"]
         }
     ],
-    "ruby.rubocop.onSave": false
+    "ruby.rubocop.onSave": false,
+    "vim.normalModeKeyBindings": [
+        {
+            "before": [";"],
+            "after": [":"]
+        }
+    ],
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "aws.profile": "default",
+    "aws.recentCredentials": [
+        "default"
+    ],
+    "aws.region": [
+        "ap-northeast-1"
+    ]
 }

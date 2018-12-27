@@ -16,7 +16,7 @@ else
   alias ls='ls -F --color=auto'
 fi
 
-alias lhtr='ls -lahtr'
+alias ll='ls -lahtr'
 
 # alias gls='ls -laGF'
 alias tree='tree --charset=C'

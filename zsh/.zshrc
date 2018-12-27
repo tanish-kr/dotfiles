@@ -2,8 +2,14 @@ if [ -f ~/.bashrc ]; then
   source ~/.bashrc
 fi
 
+if [[ `which go` ]]; then
+  export GOPATH=`go env GOPATH`
+else
+  export GOPATH=$HOME/go
+fi
+
 # PATHの順番に気をつけないと行けないのでこちらに設定
-PATH=$HOME/bin:$PATH
+PATH=$GOPATH:$HOME/bin:$PATH
 
 # anyenvがあればそれだけでいい
 if [ -e $HOME/.anyenv ]; then
@@ -18,6 +24,8 @@ else
     eval "$(rbenv init -)"
   fi
 fi
+
+
 
 bindkey -v
 # bindkey -e
@@ -142,3 +150,4 @@ fi
 export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH"
 # esc 遅延
 KEYTIMEOUT=1
+function gi() { curl -L -s https://www.gitignore.io/api/$@ ;}
