@@ -286,5 +286,10 @@
     "key": "shift+alt+f3",
     "command": "-editor.action.dirtydiff.previous",
     "when": "editorTextFocus"
+  },
+  {
+    "key": "ctrl+f",
+    "command": "extension.vim_ctrl+f",
+    "when": "editorTextFocus && vim.active && vim.use<C-f> && !inDebugRepl && vim.mode == 'Insert'"
   }
 ]
