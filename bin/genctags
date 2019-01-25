@@ -7,7 +7,7 @@ BASE_DIR=$(pwd)
 
 if [ -e "$BASE_DIR/$GIT_DIR" ]; then
   for lang in ${LANGS[@]}; do
-    ctags -R --tag-relative=yes --sort=yes --append=no --languages=$lang --exclude="tmp" --exclude="cache" --exclude="test" -f "$GIT_DIR/${lang}_tags" 2> /dev/null
+    ctags -R --tag-relative=yes --sort=yes --append=no --languages=$lang --exclude="tmp" --exclude="cache" --exclude="vendor" --exclude="node_modules" --exclude="test" -f "$GIT_DIR/${lang}_tags" 2> /dev/null
   done
   echo "Generate ctags to $BASE_DIR/$GIT_DIR"
 else
@@ -15,7 +15,7 @@ else
     mkdir -p $COMMON_DIR
   fi
   for lang in ${LANGS[@]}; do
-    ctags -R --tag-relative=yes --sort=yes --append=no --languages=$lang --exclude="tmp" --exclude="cache" --exclude="test" -f "$COMMON_DIR/${lang}_tags" 2> /dev/null
+    ctags -R --tag-relative=yes --sort=yes --append=no --languages=$lang --exclude="tmp" --exclude="cache" --exclude="vendor" --exclude="node_modules" --exclude="test" -f "$COMMON_DIR/${lang}_tags" 2> /dev/null
   done
   echo "Generate ctags to $COMMON_DIR"
 fi

@@ -19,6 +19,12 @@ else
   fi
 fi
 
+# for direnv
+if type "direnv" > /dev/null 2>&1; then
+  export EDITOR=vim
+  eval "$(direnv hook zsh)"
+fi
+
 bindkey -v
 # bindkey -e
 bindkey "^R" history-incremental-search-backward
