@@ -19,6 +19,11 @@
     "when": "terminalFocus"
   },
   {
+    "key": "ctrl+f",
+    "command": "extension.vim_escape",
+    "when": "editorTextFocus && vim.active && vim.mode == 'Insert' && !inDebugRepl"
+  },
+  {
     "key": "pagedown",
     "command": "-workbench.action.terminal.scrollDownPage",
     "when": "terminalFocus"

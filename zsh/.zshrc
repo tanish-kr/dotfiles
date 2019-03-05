@@ -19,6 +19,17 @@ else
   fi
 fi
 
+# for direnv
+if type "direnv" > /dev/null 2>&1; then
+  export EDITOR=vim
+  eval "$(direnv hook zsh)"
+fi
+
+# vscode cli tools
+if [ "$(uname)" = 'Darwin' ] && [ -e "/Applications/Visual Studio Code.app" ]; then
+  export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin:$PATH"
+fi
+
 bindkey -v
 # bindkey -e
 bindkey "^R" history-incremental-search-backward
