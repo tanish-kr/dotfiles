@@ -39,4 +39,4 @@
 -- \set some_alias `cat ~/.psqlrc-aliases/some_client/some_alias.sql`
 
 -- Useful only in interactive mode. Add custom alias sets below.
-\ir .psqlrc-admin
+-- \ir .psqlrc-admin

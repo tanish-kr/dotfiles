@@ -152,3 +152,4 @@ fi
 
 # esc 遅延
 KEYTIMEOUT=1
+function gi() { curl -L -s https://www.gitignore.io/api/$@ ;}
