@@ -23,7 +23,11 @@
   fh="fetch"
   chp="cherry-pick"
 [user]
-  name = kitaro-tn
-  email = tora.1986.tatsu@gmail.com
+  name = tatsunori-nishikori
+  email = tatsunori_nishikori@c.dwango.co.jp
 [core]
-  # excludesFile = /Users/t_nishikori/.gitignore_global
+  excludesFile = ~/.gitignore_global
+  editor = vim -u NONE
+[diff "xlsx"]
+  binary = true
+  textconv = $GOPATH/bin/git-xlsx-textconv
