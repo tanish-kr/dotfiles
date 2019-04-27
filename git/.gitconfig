@@ -23,8 +23,8 @@
   fh="fetch"
   chp="cherry-pick"
 [user]
-  name = tatsunori-nishikori
-  email = tatsunori_nishikori@c.dwango.co.jp
+  name = kitaro-tn
+  email = tora.1986.tatsu@gmail.com
 [core]
   excludesFile = ~/.gitignore_global
   editor = vim -u NONE
