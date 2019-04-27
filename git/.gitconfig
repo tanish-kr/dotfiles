@@ -28,6 +28,3 @@
 [core]
   excludesFile = ~/.gitignore_global
   editor = vim -u NONE
-[diff "xlsx"]
-  binary = true
-  textconv = $GOPATH/bin/git-xlsx-textconv
