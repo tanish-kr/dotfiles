@@ -26,4 +26,5 @@
   name = kitaro-tn
   email = tora.1986.tatsu@gmail.com
 [core]
-  # excludesFile = /Users/t_nishikori/.gitignore_global
+  excludesFile = ~/.gitignore_global
+  editor = vim -u NONE

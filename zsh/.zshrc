@@ -32,7 +32,16 @@ fi
 
 bindkey -v
 # bindkey -e
-bindkey "^R" history-incremental-search-backward
+
+# Search backwards and forwards with a pattern
+bindkey -M vicmd '/' history-incremental-pattern-search-backward
+bindkey -M vicmd '?' history-incremental-pattern-search-forward
+
+# set up for insert mode too
+bindkey -M viins '^r' history-incremental-pattern-search-backward
+bindkey -M viins '^n' history-incremental-pattern-search-forward
+
+# ESCの代わりにctr+f
 bindkey -M viins '^f' vi-cmd-mode
 
 autoload -U compinit; compinit
