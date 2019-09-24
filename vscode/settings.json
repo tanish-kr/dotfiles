@@ -34,11 +34,14 @@
             "after": ["<Esc>"]
         }
     ],
-    "ruby.rubocop.onSave": false,
     "vim.normalModeKeyBindings": [
         {
             "before": [";"],
             "after": [":"]
         }
-    ]
+    ],
+    "ruby.intellisense": "rubyLocate",
+    "ruby.format": "rubocop",
+    "ruby.rubocop.useBundler": true,
+    "ruby.codeCompletion": "rcodetools"
 }
