@@ -1,5 +1,5 @@
 {
-    "workbench.colorTheme": "Monokai",
+    "workbench.colorTheme": "Firefox Devtools",
     "terminal.external.osxExec": "iTerm.app",
     "workbench.startupEditor": "newUntitledFile",
     "files.insertFinalNewline": true,
@@ -34,11 +34,18 @@
             "after": ["<Esc>"]
         }
     ],
-    "ruby.rubocop.onSave": false,
     "vim.normalModeKeyBindings": [
         {
             "before": [";"],
             "after": [":"]
         }
+    ],
+    "files.eol": "\n",
+    "git.autofetch": true,
+    "ruby.rubocop.useBundler": true,
+    "solargraph.useBundler": true,
+    "sass.disableAutoIndent": true,
+    "terminal.integrated.shellArgs.linux": [
+        "-l"
     ]
 }
