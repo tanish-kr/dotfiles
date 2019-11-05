@@ -2,34 +2,6 @@ if [ -f ~/.bashrc ]; then
   source ~/.bashrc
 fi
 
-# PATHの順番に気をつけないと行けないのでこちらに設定
-PATH=$HOME/bin:$PATH
-
-# anyenvがあればそれだけでいい
-if [ -e $HOME/.anyenv ]; then
-  export PATH="$HOME/.anyenv/bin:$PATH"
-  eval "$(anyenv init - zsh)"
-  if [ -e $HOME/.anyenv/envs/pyenv/plugins/pyenv-virtualenv ]; then
-    eval "$(pyenv virtualenv-init -)"
-  fi
-else
-  if [ -e $HOME/.rbenv ]; then
-    export PATH="$HOME/.rbenv/bin:$PATH"
-    eval "$(rbenv init -)"
-  fi
-fi
-
-# for direnv
-if type "direnv" > /dev/null 2>&1; then
-  export EDITOR=vim
-  eval "$(direnv hook zsh)"
-fi
-
-# vscode cli tools
-if [ "$(uname)" = 'Darwin' ] && [ -e "/Applications/Visual Studio Code.app" ]; then
-  export PATH="/Applications/Visual Studio Code.app/Contents/Resources/app/bin:$PATH"
-fi
-
 bindkey -v
 # bindkey -e
 
@@ -126,13 +98,13 @@ setopt SHARE_HISTORY
 function history-all { history -E 1 }
 
 agent="$HOME/.ssh/ssh_auth_sock"
-if [ -S "$SSH_AUTH_SOCK" ]; then
+if [[ -v SSH_AUTH_SOCK ]]; then
     case $SSH_AUTH_SOCK in
     /tmp/*/agent.[0-9]*)
         # ln -snf "$SSH_AUTH_SOCK" $agent && export SSH_AUTH_SOCK=$agent
         export SSH_AUTH_SOCK=$agent
     esac
-elif [ -S $agent ]; then
+elif [[ -v $agent ]]; then
     export SSH_AUTH_SOCK=$agent
 else
     echo "no ssh-agent"
