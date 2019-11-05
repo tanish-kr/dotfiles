@@ -23,7 +23,7 @@
   fh="fetch"
   chp="cherry-pick"
 [user]
-  name = kitaro-tn
+  name = tanish-kr
   email = tora.1986.tatsu@gmail.com
 [core]
   excludesFile = ~/.gitignore_global
