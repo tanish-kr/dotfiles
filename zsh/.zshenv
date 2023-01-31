@@ -12,11 +12,14 @@ fi
 
 if [ "$(uname)" = 'Darwin' ]; then
   alias ls='ls -GF'
+  alias ll='ls -lahtr'
+  if [[ `which gsed` ]]; then
+    alias sed='gsed'
+  fi
 else
   alias ls='ls -F --color=auto'
 fi
 
-alias ll='ls -lahtr'
 
 # alias gls='ls -laGF'
 alias tree='tree --charset=C'
@@ -32,3 +35,7 @@ alias nonmacs="emacs -q"
 if [ -e "/Applications/MacVim.app/Contents/MacOS/Vim" ]; then
   alias vim='/Applications/MacVim.app/Contents/MacOS/Vim'
 fi
+
+alias chrome="/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome"
+alias chrome-canary="/Applications/Google\ Chrome\ Canary.app/Contents/MacOS/Google\ Chrome\ Canary"
+alias chromium="/Applications/Chromium.app/Contents/MacOS/Chromium"

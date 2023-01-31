@@ -134,3 +134,12 @@ fi
 # esc 遅延
 KEYTIMEOUT=1
 function gi() { curl -L -s https://www.gitignore.io/api/$@ ;}
+export PATH="/usr/local/opt/openjdk/bin:$PATH"
+
+# The next line updates PATH for the Google Cloud SDK.
+if [ -f '/Users/t_nishikiori/tool/google-cloud-sdk/path.zsh.inc' ]; then . '/Users/t_nishikiori/tool/google-cloud-sdk/path.zsh.inc'; fi
+
+# The next line enables shell command completion for gcloud.
+if [ -f '/Users/t_nishikiori/tool/google-cloud-sdk/completion.zsh.inc' ]; then . '/Users/t_nishikiori/tool/google-cloud-sdk/completion.zsh.inc'; fi
+
+. /usr/local/opt/asdf/libexec/asdf.sh
