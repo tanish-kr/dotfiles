@@ -28,3 +28,5 @@
 [core]
   excludesFile = ~/.gitignore_global
   editor = vim -u NONE
+[pull]
+	ff = true

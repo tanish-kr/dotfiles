@@ -7,3 +7,5 @@ tmux/.tmux/plugins/*
 tmux/.tmux/resurrect
 nvim/.netrwhist
 !tmux/.tmux/plugins/tpm
+
+tmux-*.log
