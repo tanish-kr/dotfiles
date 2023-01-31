@@ -1,11 +1,12 @@
 {
-    "workbench.colorTheme": "Firefox Devtools",
+    "workbench.colorTheme": "Monokai GRS",
     "terminal.external.osxExec": "iTerm.app",
     "workbench.startupEditor": "newUntitledFile",
     "files.insertFinalNewline": true,
     "files.trimFinalNewlines": false,
     "files.exclude": {
-        "**/.git": true,
+        "**/.git": false,
+        "**/.yarn": true,
         "**/.svn": true,
         "**/.hg": true,
         "**/CVS": true,
@@ -38,14 +39,42 @@
         {
             "before": [";"],
             "after": [":"]
+        },
+        {
+            "before": ["<C-n>"],
+            "commands": [":tabn"]
+        },
+        {
+            "before": ["<C-p>"],
+            "commands": [":tabp"]
         }
     ],
     "files.eol": "\n",
     "git.autofetch": true,
     "ruby.rubocop.useBundler": true,
-    "solargraph.useBundler": true,
     "sass.disableAutoIndent": true,
     "terminal.integrated.shellArgs.linux": [
         "-l"
+    ],
+    "tabnine.experimentalAutoImports": true,
+    "workbench.iconTheme": "material-icon-theme",
+    "vim.commandLineModeKeyBindings": [
+
+    ],
+    "omnisharp.useModernNet": false,
+    "clock.alignment": "Right",
+    "clock.format": "yyyy/mm/dd HH:MM:ss",
+    "vim.ignorecase": false,
+    "vim.smartcase": false,
+    "redhat.telemetry.enabled": true,
+    "vim.normalModeKeyBindingsNonRecursive": [
+        {
+            "before" : ["u"],
+            "commands" : ["undo"]
+        },
+        {
+            "before" : ["<C-r>"],
+            "commands" : ["redo"]
+        }
     ]
 }

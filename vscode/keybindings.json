@@ -1,6 +1,14 @@
 // 既定値を上書きするには、このファイル内にキー バインドを挿入します
 [
   {
+    "key": "cmd+n",
+    "command": "explorer.newFile"
+  },
+  {
+    "key": "cmd+shift+n",
+    "command": "explorer.newFolder"
+  },
+  {
     "key": "alt+g c",
     "command": "git.commit"
   },
