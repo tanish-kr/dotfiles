@@ -1,0 +1,20 @@
+#!/bin/bash
+
+CLUSTER_NAME=""
+SERVICE_NAME=""
+CONTAINER_NAME=""
+
+TASK_ARNS=$(aws ecs list-tasks --cluster ${CLUSTER_NAME} --service-name ${SERVICE_NAME} --desired-status RUNNING --query 'taskArns[*]' --output text | awk '{print $1}')
+
+if [ -n "$TASK_ARNS" ]; then
+  FIRST_TASK_ARN=$(echo "$TASK_ARNS" | head -n1)
+else
+  echo "No tasks found"
+  exit 1
+fi
+
+TASK_ID=$(echo "${FIRST_TASK_ARN}" | cut -d / -f 3)
+
+echo "Task ID: ${TASK_ID}"
+
+aws ecs execute-command --cluster ${CLUSTER_NAME} --task ${TASK_ID} --container ${CONTAINER_NAME} --interactive --command "/bin/bash"
