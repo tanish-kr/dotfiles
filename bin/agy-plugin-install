@@ -1,0 +1,25 @@
+#!/bin/bash
+while read -r ext; do
+  [[ -z "$ext" || "$ext" =~ ^# ]] && continue
+
+  while true; do
+    read -p "Install $ext? [y: Yes / n: No / o: Open Marketplace]: " resp < /dev/tty
+    case "$resp" in
+      [yY]*)
+        agy-ide --install-extension "$ext"
+        break
+        ;;
+      [nN]*)
+        break
+        ;;
+      [oO]*)
+        echo "Opening Marketplace page for $ext..."
+        open "https://marketplace.visualstudio.com/items?itemName=$ext"
+        # 引き続き対話を継続するため、breakせずに再度入力を求めます
+        ;;
+      *)
+        echo "Please enter y, n, or o."
+        ;;
+    esac
+  done
+done < ~/.dotfiles/vscode/extensions_list.txt
