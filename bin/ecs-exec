@@ -1,10 +1,26 @@
-#!/bin/bash
+#!/bin/bash -ex
 
-CLUSTER_NAME=""
-SERVICE_NAME=""
-CONTAINER_NAME=""
+PROFILE=$1
+CLUSTER_NAME=$2
+# SERVICE_NAME=$3
+CONTAINER_NAME=$3
 
-TASK_ARNS=$(aws ecs list-tasks --cluster ${CLUSTER_NAME} --service-name ${SERVICE_NAME} --desired-status RUNNING --query 'taskArns[*]' --output text | awk '{print $1}')
+if [ -z "$PROFILE" ]; then
+  echo "must profile name"
+  exit 1
+fi
+
+if [ -z "$CLUSTER_NAME" ]; then
+  echo "list clusters"
+  aws ecs list-clusters --profile ${PROFILE}
+  exit 1
+fi
+
+aws ecs list-tasks --profile ${PROFILE} --cluster ${CLUSTER_NAME} --desired-status RUNNING --query 'taskArns[*]' --output text
+
+TASK_ARNS=$(aws ecs list-tasks --profile ${PROFILE} --cluster ${CLUSTER_NAME} --desired-status RUNNING --query 'taskArns[*]' --output text | awk '{print $1}')
+
+echo $TASK_ARNS
 
 if [ -n "$TASK_ARNS" ]; then
   FIRST_TASK_ARN=$(echo "$TASK_ARNS" | head -n1)
@@ -17,4 +33,11 @@ TASK_ID=$(echo "${FIRST_TASK_ARN}" | cut -d / -f 3)
 
 echo "Task ID: ${TASK_ID}"
 
-aws ecs execute-command --cluster ${CLUSTER_NAME} --task ${TASK_ID} --container ${CONTAINER_NAME} --interactive --command "/bin/bash"
+if [ -z "$CONTAINER_NAME" ]; then
+  echo "container name lists"
+  aws ecs describe-tasks --profile ${PROFILE} --cluster ${CLUSTER_NAME} --task ${TASK_ID} --query 'tasks[].containers[].name'
+else
+  echo "exec bash in ecs"
+  aws ecs execute-command --profile ${PROFILE} --cluster ${CLUSTER_NAME} --task ${TASK_ID} --container ${CONTAINER_NAME} --interactive --command "/bin/sh" --debug
+  # aws ecs execute-command --profile ${PROFILE} --cluster ${CLUSTER_NAME} --task ${TASK_ID} --container ${CONTAINER_NAME} --interactive --command "bundle exec rails c"
+fi

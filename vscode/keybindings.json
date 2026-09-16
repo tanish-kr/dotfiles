@@ -190,7 +190,7 @@
     "command": "-workbench.action.focusSideBar"
   },
   {
-    "key": "shift+space f",
+    "key": "ctrl+w ctrl+f",
     "command": "workbench.files.action.focusFilesExplorer"
   },
   {
@@ -339,5 +339,10 @@
     "key": "f11",
     "command": "-workbench.action.debug.stepInto",
     "when": "debugState != 'inactive'"
+  },
+  {
+    "key": "enter",
+    "command": "-endwise.enter",
+    "when": "editorTextFocus && vim.mode != 'CommandlineInProgress' && vim.mode != 'Normal' && vim.mode != 'SearchInProgressMode' && editorLangId =~ /^ruby$|^crystal$/"
   }
 ]
