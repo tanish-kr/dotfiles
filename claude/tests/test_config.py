@@ -464,5 +464,153 @@ class TestDiff(unittest.TestCase):
         self.assertEqual(len(result["only_local"]), 1)
 
 
+class TestResolveMissingPaths(unittest.TestCase):
+    def test_asks_once_per_distinct_path(self):
+        entries = [
+            _plugin("a@m", scope="project", project="__HOME__/workspace/app"),
+            _plugin("b@m", scope="project", project="__HOME__/workspace/app"),
+        ]
+        asked = []
+
+        def prompt(message):
+            asked.append(message)
+            return "/Users/bob/src/app"
+
+        config.resolve_missing_paths(entries, "/Users/bob", {}, prompt)
+        self.assertEqual(len(asked), 1)
+
+    def test_learns_prefix_and_returns_mapping(self):
+        entries = [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]
+        mapping = config.resolve_missing_paths(
+            entries, "/Users/bob", {}, lambda message: "/Users/bob/src/app"
+        )
+        self.assertEqual(mapping, {"__HOME__/workspace": "__HOME__/src"})
+
+    def test_blank_answer_skips_without_mapping(self):
+        entries = [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]
+        mapping = config.resolve_missing_paths(entries, "/Users/bob", {}, lambda message: "")
+        self.assertEqual(mapping, {})
+
+    def test_falls_back_to_exact_mapping_when_no_common_suffix(self):
+        entries = [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]
+        mapping = config.resolve_missing_paths(
+            entries, "/Users/bob", {}, lambda message: "/Users/bob/elsewhere"
+        )
+        self.assertEqual(mapping, {"__HOME__/workspace/app": "__HOME__/elsewhere"})
+
+    def test_no_prompt_callable_means_no_mapping(self):
+        entries = [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]
+        self.assertEqual(config.resolve_missing_paths(entries, "/Users/bob", {}, None), {})
+
+
+class TestRunCommand(unittest.TestCase):
+    def test_dry_run_reports_without_executing(self):
+        lines = []
+        ok = config.run_command(
+            ["plugin", "install", "a@m"], dry_run=True, log=lines.append,
+            executable="claude-does-not-exist",
+        )
+        self.assertTrue(ok)
+        self.assertIn("claude plugin install a@m", lines[0])
+
+    def test_returns_false_and_logs_when_executable_missing(self):
+        lines = []
+        ok = config.run_command(
+            ["plugin", "install", "a@m"], log=lines.append,
+            executable="claude-does-not-exist",
+        )
+        self.assertFalse(ok)
+        self.assertTrue(any("claude-does-not-exist" in line for line in lines))
+
+
+class TestImportConfig(unittest.TestCase):
+    def _manifest_dir(self, tmp):
+        plugins = {
+            "marketplaces": [{"name": "m", "source": "github", "repo": "example-org/plugins"}],
+            "plugins": [_plugin("a@m")],
+        }
+        mcp = {"servers": [{"name": "docs", "scope": "user",
+                            "config": {"type": "http", "url": "https://mcp.example.com/mcp"}}]}
+        config.write_manifest(Path(tmp), plugins, mcp)
+        return Path(tmp)
+
+    def test_dry_run_executes_nothing_and_lists_commands(self):
+        lines = []
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_dir = self._manifest_dir(tmp)
+            code = config.import_config(
+                manifest_dir, "/Users/bob", dry_run=True, no_prompt=True,
+                environ={}, log=lines.append,
+                collect=lambda d, h: ({"marketplaces": [], "plugins": []}, {"servers": []}),
+            )
+        self.assertEqual(code, 0)
+        joined = "\n".join(lines)
+        self.assertIn("plugin marketplace add example-org/plugins", joined)
+        self.assertIn("mcp add-json docs", joined)
+
+    def test_skips_server_with_unresolved_placeholder(self):
+        lines = []
+        with tempfile.TemporaryDirectory() as tmp:
+            config.write_manifest(
+                Path(tmp),
+                {"marketplaces": [], "plugins": []},
+                {"servers": [{"name": "docs", "scope": "user",
+                              "config": {"type": "http", "url": "https://mcp.example.com/mcp",
+                                         "headers": {"Authorization": "Bearer ${TOK}"}}}]},
+            )
+            code = config.import_config(
+                Path(tmp), "/Users/bob", dry_run=True, no_prompt=True, environ={},
+                log=lines.append,
+                collect=lambda d, h: ({"marketplaces": [], "plugins": []}, {"servers": []}),
+            )
+        self.assertEqual(code, 1)
+        self.assertTrue(any("TOK" in line for line in lines))
+
+    def test_already_present_entry_is_not_reinstalled(self):
+        lines = []
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_dir = self._manifest_dir(tmp)
+            local_plugins, local_mcp = config.load_manifest(manifest_dir)
+            code = config.import_config(
+                manifest_dir, "/Users/bob", dry_run=True, no_prompt=True, environ={},
+                log=lines.append, collect=lambda d, h: (local_plugins, local_mcp),
+            )
+        self.assertEqual(code, 0)
+        self.assertNotIn("plugin install", "\n".join(lines))
+
+    def test_no_prompt_leaves_project_missing_unasked(self):
+        lines = []
+        with tempfile.TemporaryDirectory() as tmp:
+            config.write_manifest(
+                Path(tmp),
+                {"marketplaces": [],
+                 "plugins": [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]},
+                {"servers": []},
+            )
+            code = config.import_config(
+                Path(tmp), "/Users/bob", dry_run=False, no_prompt=True, environ={},
+                log=lines.append,
+                collect=lambda d, h: ({"marketplaces": [], "plugins": []}, {"servers": []}),
+                prompt=lambda message: self.fail("非対話なのに入力を求めた"),
+            )
+        self.assertEqual(code, 0)
+        self.assertTrue(any("workspace/app" in line for line in lines))
+
+    def test_dry_run_never_prompts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config.write_manifest(
+                Path(tmp),
+                {"marketplaces": [],
+                 "plugins": [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]},
+                {"servers": []},
+            )
+            config.import_config(
+                Path(tmp), "/Users/bob", dry_run=True, no_prompt=False, environ={},
+                log=lambda line: None,
+                collect=lambda d, h: ({"marketplaces": [], "plugins": []}, {"servers": []}),
+                prompt=lambda message: self.fail("dry-run なのに入力を求めた"),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

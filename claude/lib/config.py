@@ -379,6 +379,177 @@ def resolved_project_path(entry, home, path_map):
     return localize_home(apply_path_map(raw, path_map or {}), home)
 
 
+def resolve_missing_paths(entries, home, path_map, prompt):
+    """見つからない projectPath を対話的に解決し、読み替え表を返す。
+
+    同じパスは 1 度しか尋ねない。1 件の回答から共通プレフィックスの差を学習し、
+    同じ読み替えが使える残りのエントリを自動で解決する。
+    """
+    if prompt is None:
+        return {}
+    learned = {}
+    asked = set()
+    for entry in entries:
+        raw = entry.get("projectPath")
+        if not raw or raw in asked:
+            continue
+        if apply_path_map(raw, learned) != raw:
+            continue
+        asked.add(raw)
+        answer = prompt("%s が見つかりません。新しいパス（空 Enter でスキップ）: " % raw).strip()
+        if not answer:
+            continue
+        normalized = normalize_home(os.path.expanduser(answer).rstrip("/"), home)
+        pair = learn_prefix(raw, normalized)
+        if pair:
+            learned[pair[0]] = pair[1]
+        else:
+            learned[raw] = normalized
+    return learned
+
+
+def run_command(argv, cwd=None, dry_run=False, executable="claude", log=print):
+    """claude CLI を 1 回実行する。失敗しても例外にせず False を返す。
+
+    dry-run のプレビューは常に実コマンド名 "claude" で表示する。executable は
+    実行時に差し替える注入点であり、テストが偽の実行ファイルを渡しても
+    プレビュー表示には影響しない。
+    """
+    if dry_run:
+        log("  [dry-run] claude %s" % " ".join(argv))
+        return True
+    shown = "%s %s" % (executable, " ".join(argv))
+    log("  %s" % shown)
+    try:
+        completed = subprocess.run([executable] + list(argv), cwd=cwd, check=False)
+    except OSError as error:
+        log("  ! 実行できません: %s (%s)" % (shown, error))
+        return False
+    if completed.returncode != 0:
+        log("  ! 失敗 (終了コード %d): %s" % (completed.returncode, shown))
+        return False
+    return True
+
+
+def export_config(manifest_dir, home):
+    """このマシンの状態を manifest に書き出す。"""
+    plugins, mcp = collect_local(manifest_dir, home)
+    return write_manifest(manifest_dir, plugins, mcp)
+
+
+def _report(log, label, entries, describe):
+    if not entries:
+        return
+    log("%s (%d)" % (label, len(entries)))
+    for entry in entries:
+        log("  %s" % describe(entry))
+
+
+def _describe_plugin(entry):
+    suffix = " @ %s" % entry["projectPath"] if entry.get("projectPath") else ""
+    return "%s [%s]%s" % (entry["id"], entry.get("scope", "user"), suffix)
+
+
+def _describe_mcp(entry):
+    suffix = " @ %s" % entry["projectPath"] if entry.get("projectPath") else ""
+    return "%s [%s]%s" % (entry["name"], entry.get("scope", "user"), suffix)
+
+
+def _diffs(manifest_dir, home, path_map, collect):
+    # manifest を先に読む。ディレクトリが無いときに claude CLI を呼ばずに済む。
+    manifest_plugins, manifest_mcp = load_manifest(manifest_dir)
+    local_plugins, local_mcp = collect(manifest_dir, home)
+    plugin_diff = diff_entries(
+        local_plugins["plugins"], manifest_plugins["plugins"], plugin_key, home, path_map
+    )
+    mcp_diff = diff_entries(
+        local_mcp["servers"], manifest_mcp["servers"], mcp_key, home, path_map
+    )
+    return manifest_plugins, plugin_diff, mcp_diff
+
+
+def status_config(manifest_dir, home, log=print, collect=None):
+    """ローカル状態と manifest の差分を表示する。"""
+    collect = collect or collect_local
+    path_map = load_path_map(manifest_dir)
+    _, plugin_diff, mcp_diff = _diffs(manifest_dir, home, path_map, collect)
+    for label, diff, describe in (
+        ("plugins", plugin_diff, _describe_plugin),
+        ("mcp", mcp_diff, _describe_mcp),
+    ):
+        log("== %s ==" % label)
+        _report(log, "manifest のみ", diff["only_manifest"], describe)
+        _report(log, "ローカルのみ", diff["only_local"], describe)
+        _report(log, "内容が異なる", diff["differs"], describe)
+        _report(log, "プロジェクト未配置", diff["project_missing"], describe)
+    total = sum(len(v) for diff in (plugin_diff, mcp_diff) for v in diff.values())
+    if total == 0:
+        log("差分はありません")
+    return 0
+
+
+def import_config(
+    manifest_dir, home, dry_run=False, no_prompt=False,
+    environ=None, prompt=None, log=print, collect=None,
+):
+    """manifest の内容をこのマシンに導入する。追加のみで、削除はしない。"""
+    collect = collect or collect_local
+    environ = os.environ if environ is None else environ
+    interactive = not dry_run and not no_prompt and prompt is not None
+    path_map = load_path_map(manifest_dir)
+
+    manifest_plugins, plugin_diff, mcp_diff = _diffs(manifest_dir, home, path_map, collect)
+
+    if interactive:
+        missing = plugin_diff["project_missing"] + mcp_diff["project_missing"]
+        learned = resolve_missing_paths(missing, home, path_map, prompt)
+        if learned:
+            path_map = dict(path_map)
+            path_map.update(learned)
+            save_path_map(manifest_dir, path_map)
+            manifest_plugins, plugin_diff, mcp_diff = _diffs(
+                manifest_dir, home, path_map, collect
+            )
+
+    failures = 0
+
+    log("== marketplaces ==")
+    for entry in manifest_plugins["marketplaces"]:
+        if not run_command(marketplace_argv(entry, home), dry_run=dry_run, log=log):
+            failures += 1
+
+    log("== plugins ==")
+    for entry in plugin_diff["only_manifest"]:
+        cwd = resolved_project_path(entry, home, path_map)
+        if not run_command(plugin_argv(entry), cwd=cwd, dry_run=dry_run, log=log):
+            failures += 1
+            continue
+        if not entry.get("enabled", True):
+            if not run_command(plugin_disable_argv(entry), cwd=cwd, dry_run=dry_run, log=log):
+                failures += 1
+
+    log("== mcp ==")
+    for entry in mcp_diff["only_manifest"]:
+        expanded, missing = expand_server_config(entry["config"], home, environ)
+        if missing:
+            failures += 1
+            log("  ! %s をスキップ: %s が未設定です" % (entry["name"], ", ".join(missing)))
+            log("    設定後に再実行してください")
+            continue
+        cwd = resolved_project_path(entry, home, path_map)
+        if not run_command(mcp_argv(entry, expanded), cwd=cwd, dry_run=dry_run, log=log):
+            failures += 1
+
+    skipped = plugin_diff["project_missing"] + mcp_diff["project_missing"]
+    if skipped:
+        log("== プロジェクト未配置のためスキップ ==")
+        for entry in skipped:
+            log("  %s" % entry.get("projectPath"))
+        log("  リポジトリを配置してから再実行してください")
+
+    return 1 if failures else 0
+
+
 def diff_entries(local, manifest, key_fn, home, path_map=None, exists=None):
     """正規化済みの 2 つのエントリ列を比べる。
 
