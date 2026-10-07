@@ -208,7 +208,10 @@ def import_sessions(archive, projects, home, dry_run=False, force=False, log=pri
                 else:
                     shutil.copy2(src, dest)
             result["files"] += 1
-            if src.suffix == ".jsonl":
+            # export と同じ定義で数える。セッション transcript は
+            # <project>/<uuid>.jsonl のみで、その配下の subagent transcript は
+            # セッションの中身であってセッションではない。
+            if src.suffix == ".jsonl" and len(rel.parts) == 2:
                 result["transcripts"] += 1
 
     return result

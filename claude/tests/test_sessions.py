@@ -338,6 +338,29 @@ class TestImportSessions(unittest.TestCase):
                 sessions.import_sessions(archive, Path(tmp) / "r", "/Users/alice", log=lambda m: None)
             self.assertIn("meta.json", str(caught.exception))
 
+    def test_transcript_count_excludes_nested_subagent_transcripts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects = Path(tmp) / "projects"
+            projects.mkdir()
+            _make_projects(projects, {
+                "-Users-alice-workspace-app/aaa.jsonl":
+                    json.dumps({"cwd": "/Users/alice/workspace/app"}) + "\n",
+                "-Users-alice-workspace-app/aaa/subagents/sub.jsonl":
+                    json.dumps({"cwd": "/Users/alice/workspace/app"}) + "\n",
+            })
+            archive = Path(tmp) / "archive.tar.gz"
+            with tarfile.open(archive, "w:gz") as tar:
+                tar.add(projects, arcname=".")
+                payload = json.dumps({"home": "/Users/alice", "transcripts": 1}).encode("utf-8")
+                info = tarfile.TarInfo("meta.json")
+                info.size = len(payload)
+                tar.addfile(info, io.BytesIO(payload))
+            result = sessions.import_sessions(
+                archive, Path(tmp) / "restored", "/Users/alice", log=lambda m: None
+            )
+            self.assertEqual(result["transcripts"], 1)
+            self.assertEqual(result["files"], 2)
+
     def test_archive_cannot_escape_destination(self):
         with tempfile.TemporaryDirectory() as tmp:
             archive = Path(tmp) / "evil.tar.gz"
