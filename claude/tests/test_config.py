@@ -598,6 +598,25 @@ class TestDiff(unittest.TestCase):
         self.assertEqual([e["id"] for e in result["only_manifest"]], ["a@m"])
         self.assertEqual(result["project_missing"], [])
 
+    def test_entry_present_on_both_sides_is_never_project_missing(self):
+        # 既に入っているものは導入する必要がないので、ディレクトリの所在は関係ない。
+        entry = _plugin("a@m", scope="project", project="__HOME__/workspace/app")
+        result = config.diff_entries(
+            [dict(entry)], [entry], config.plugin_key, "/Users/alice", exists=lambda p: False
+        )
+        self.assertEqual(result["project_missing"], [])
+        self.assertEqual(result["only_manifest"], [])
+        self.assertEqual(result["differs"], [])
+
+    def test_differing_entry_present_on_both_sides_is_differs(self):
+        local = _plugin("a@m", scope="project", project="__HOME__/workspace/app", enabled=True)
+        manifest = _plugin("a@m", scope="project", project="__HOME__/workspace/app", enabled=False)
+        result = config.diff_entries(
+            [local], [manifest], config.plugin_key, "/Users/alice", exists=lambda p: False
+        )
+        self.assertEqual(len(result["differs"]), 1)
+        self.assertEqual(result["project_missing"], [])
+
     def test_path_map_is_applied_before_existence_check(self):
         entry = _plugin("a@m", scope="project", project="__HOME__/workspace/app")
         seen = []
@@ -635,31 +654,99 @@ class TestResolveMissingPaths(unittest.TestCase):
             asked.append(message)
             return "/Users/bob/src/app"
 
-        config.resolve_missing_paths(entries, "/Users/bob", {}, prompt)
+        config.resolve_missing_paths(
+            entries, "/Users/bob", {}, prompt, exists=lambda p: True
+        )
         self.assertEqual(len(asked), 1)
 
     def test_learns_prefix_and_returns_mapping(self):
         entries = [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]
         mapping = config.resolve_missing_paths(
-            entries, "/Users/bob", {}, lambda message: "/Users/bob/src/app"
+            entries, "/Users/bob", {}, lambda message: "/Users/bob/src/app",
+            exists=lambda p: True,
         )
         self.assertEqual(mapping, {"__HOME__/workspace": "__HOME__/src"})
 
     def test_blank_answer_skips_without_mapping(self):
         entries = [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]
-        mapping = config.resolve_missing_paths(entries, "/Users/bob", {}, lambda message: "")
+        mapping = config.resolve_missing_paths(
+            entries, "/Users/bob", {}, lambda message: "", exists=lambda p: True
+        )
         self.assertEqual(mapping, {})
 
     def test_falls_back_to_exact_mapping_when_no_common_suffix(self):
         entries = [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]
         mapping = config.resolve_missing_paths(
-            entries, "/Users/bob", {}, lambda message: "/Users/bob/elsewhere"
+            entries, "/Users/bob", {}, lambda message: "/Users/bob/elsewhere",
+            exists=lambda p: True,
         )
         self.assertEqual(mapping, {"__HOME__/workspace/app": "__HOME__/elsewhere"})
 
     def test_no_prompt_callable_means_no_mapping(self):
         entries = [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]
         self.assertEqual(config.resolve_missing_paths(entries, "/Users/bob", {}, None), {})
+
+    def test_rejects_answer_whose_target_does_not_exist(self):
+        entries = [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]
+        mapping = config.resolve_missing_paths(
+            entries, "/Users/bob", {}, lambda message: "/Users/bob/src/app",
+            exists=lambda p: False, log=lambda line: None,
+        )
+        self.assertEqual(mapping, {})
+
+    def test_asks_before_extending_prefix_to_other_entries(self):
+        entries = [
+            _plugin("a@m", scope="project", project="__HOME__/workspace/app"),
+            _plugin("b@m", scope="project", project="__HOME__/workspace/other"),
+        ]
+        asked = []
+        config.resolve_missing_paths(
+            entries, "/Users/bob", {}, lambda message: "/Users/bob/src/app",
+            confirm=lambda message: (asked.append(message), True)[1],
+            exists=lambda p: True,
+        )
+        self.assertEqual(len(asked), 1)
+        self.assertIn("__HOME__/workspace", asked[0])
+        self.assertIn("__HOME__/src", asked[0])
+
+    def test_accepted_confirmation_applies_prefix_to_the_rest(self):
+        entries = [
+            _plugin("a@m", scope="project", project="__HOME__/workspace/app"),
+            _plugin("b@m", scope="project", project="__HOME__/workspace/other"),
+        ]
+        prompted = []
+
+        def prompt(message):
+            prompted.append(message)
+            return "/Users/bob/src/app"
+
+        mapping = config.resolve_missing_paths(
+            entries, "/Users/bob", {}, prompt,
+            confirm=lambda message: True, exists=lambda p: True,
+        )
+        self.assertEqual(mapping, {"__HOME__/workspace": "__HOME__/src"})
+        self.assertEqual(len(prompted), 1)
+
+    def test_declined_confirmation_keeps_mapping_to_the_answered_path(self):
+        entries = [
+            _plugin("a@m", scope="project", project="__HOME__/workspace/app"),
+            _plugin("b@m", scope="project", project="__HOME__/workspace/other"),
+        ]
+        answers = iter(["/Users/bob/src/app", ""])
+        mapping = config.resolve_missing_paths(
+            entries, "/Users/bob", {}, lambda message: next(answers),
+            confirm=lambda message: False, exists=lambda p: True,
+        )
+        self.assertEqual(mapping, {"__HOME__/workspace/app": "__HOME__/src/app"})
+
+    def test_does_not_confirm_when_no_other_entry_is_affected(self):
+        entries = [_plugin("a@m", scope="project", project="__HOME__/workspace/app")]
+        mapping = config.resolve_missing_paths(
+            entries, "/Users/bob", {}, lambda message: "/Users/bob/src/app",
+            confirm=lambda message: self.fail("適用先が他に無いのに確認した"),
+            exists=lambda p: True,
+        )
+        self.assertEqual(mapping, {"__HOME__/workspace": "__HOME__/src"})
 
 
 class TestRunCommand(unittest.TestCase):
@@ -753,6 +840,127 @@ class TestImportConfig(unittest.TestCase):
             )
         self.assertEqual(code, 0)
         self.assertTrue(any("workspace/app" in line for line in lines))
+
+    def _record_commands(self):
+        """run_command を記録に差し替える。対話テストで実際の CLI を叩かないため。"""
+        calls = []
+        original = config.run_command
+
+        def recorder(argv, cwd=None, dry_run=False, executable="claude", log=print):
+            calls.append((argv, cwd))
+            return True
+
+        config.run_command = recorder
+        self.addCleanup(setattr, config, "run_command", original)
+        return calls
+
+    def _missing_projects_manifest(self, tmp):
+        config.write_manifest(
+            Path(tmp),
+            {"marketplaces": [],
+             "plugins": [_plugin("a@m", scope="project", project="__HOME__/workspace/app"),
+                         _plugin("b@m", scope="project", project="__HOME__/workspace/other")]},
+            {"servers": []},
+        )
+        return Path(tmp)
+
+    @staticmethod
+    def _empty_local(manifest_dir, home):
+        return {"marketplaces": [], "plugins": []}, {"servers": []}
+
+    @staticmethod
+    def _only_src_exists(path):
+        return path.startswith("/Users/bob/src/")
+
+    def test_interactive_declined_confirmation_remaps_only_the_answered_path(self):
+        calls = self._record_commands()
+        answers = iter(["/Users/bob/src/app", ""])
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_dir = self._missing_projects_manifest(tmp)
+            lines = []
+            code = config.import_config(
+                manifest_dir, "/Users/bob", environ={}, log=lines.append,
+                collect=self._empty_local, exists=self._only_src_exists,
+                prompt=lambda message: next(answers), confirm=lambda message: False,
+            )
+            saved = config.load_path_map(manifest_dir)
+        self.assertEqual(code, 0)
+        self.assertEqual(saved, {"__HOME__/workspace/app": "__HOME__/src/app"})
+        self.assertEqual(calls, [(["plugin", "install", "a@m", "-s", "project", "-y"],
+                                  "/Users/bob/src/app")])
+        self.assertTrue(any("workspace/other" in line for line in lines))
+
+    def test_interactive_accepted_confirmation_applies_prefix_to_the_rest(self):
+        calls = self._record_commands()
+        asked = []
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_dir = self._missing_projects_manifest(tmp)
+            code = config.import_config(
+                manifest_dir, "/Users/bob", environ={}, log=lambda line: None,
+                collect=self._empty_local, exists=self._only_src_exists,
+                prompt=lambda message: (asked.append(message), "/Users/bob/src/app")[1],
+                confirm=lambda message: True,
+            )
+            saved = config.load_path_map(manifest_dir)
+        self.assertEqual(code, 0)
+        self.assertEqual(len(asked), 1)
+        self.assertEqual(saved, {"__HOME__/workspace": "__HOME__/src"})
+        self.assertEqual(
+            sorted(cwd for _, cwd in calls), ["/Users/bob/src/app", "/Users/bob/src/other"]
+        )
+
+    def test_interactive_rejects_answer_whose_target_does_not_exist(self):
+        calls = self._record_commands()
+        lines = []
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_dir = self._missing_projects_manifest(tmp)
+            code = config.import_config(
+                manifest_dir, "/Users/bob", environ={}, log=lines.append,
+                collect=self._empty_local, exists=lambda path: False,
+                prompt=lambda message: "/Users/bob/src/app",
+                confirm=lambda message: self.fail("実在しない回答なのに確認した"),
+            )
+            self.assertFalse((manifest_dir / config.PATH_MAP_NAME).exists())
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, [])
+        self.assertTrue(any("存在しません" in line for line in lines))
+        self.assertTrue(any("workspace/app" in line for line in lines))
+
+    def test_interactive_blank_answer_skips_without_stopping_the_run(self):
+        calls = self._record_commands()
+        with tempfile.TemporaryDirectory() as tmp:
+            config.write_manifest(
+                Path(tmp),
+                {"marketplaces": [],
+                 "plugins": [_plugin("a@m", scope="project", project="__HOME__/workspace/app"),
+                             _plugin("user@m")]},
+                {"servers": []},
+            )
+            lines = []
+            code = config.import_config(
+                Path(tmp), "/Users/bob", environ={}, log=lines.append,
+                collect=self._empty_local, exists=self._only_src_exists,
+                prompt=lambda message: "", confirm=lambda message: True,
+            )
+            self.assertFalse((Path(tmp) / config.PATH_MAP_NAME).exists())
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, [(["plugin", "install", "user@m", "-s", "user", "-y"], None)])
+        self.assertTrue(any("workspace/app" in line for line in lines))
+
+    def test_saved_path_map_is_reapplied_without_prompting(self):
+        calls = self._record_commands()
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest_dir = self._missing_projects_manifest(tmp)
+            config.save_path_map(manifest_dir, {"__HOME__/workspace": "__HOME__/src"})
+            code = config.import_config(
+                manifest_dir, "/Users/bob", environ={}, log=lambda line: None,
+                collect=self._empty_local, exists=self._only_src_exists,
+                prompt=lambda message: self.fail("保存済みの読み替えがあるのに尋ねた"),
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            sorted(cwd for _, cwd in calls), ["/Users/bob/src/app", "/Users/bob/src/other"]
+        )
 
     def test_dry_run_never_prompts(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -445,14 +445,28 @@ def resolved_project_path(entry, home, path_map):
     return localize_home(apply_path_map(raw, path_map or {}), home)
 
 
-def resolve_missing_paths(entries, home, path_map, prompt):
+def _confirm_from_prompt(prompt):
+    """[Y/n] の問い合わせを prompt の上に組み立てる。"""
+    def confirm(message):
+        return not prompt(message).strip().lower().startswith("n")
+    return confirm
+
+
+def resolve_missing_paths(
+    entries, home, path_map, prompt, confirm=None, exists=None, log=print,
+):
     """見つからない projectPath を対話的に解決し、読み替え表を返す。
 
-    同じパスは 1 度しか尋ねない。1 件の回答から共通プレフィックスの差を学習し、
-    同じ読み替えが使える残りのエントリを自動で解決する。
+    同じパスは 1 度しか尋ねない。回答の実在を確かめてから採用し、1 件の回答から
+    導いた共通プレフィックスを残りのエントリにも適用してよいかを確認する。
+    読み替え表は保存されるため、確認なしに広げると以後の実行まで巻き込む。
     """
     if prompt is None:
         return {}
+    if exists is None:
+        exists = os.path.isdir
+    if confirm is None:
+        confirm = _confirm_from_prompt(prompt)
     learned = {}
     asked = set()
     for entry in entries:
@@ -466,7 +480,21 @@ def resolve_missing_paths(entries, home, path_map, prompt):
         if not answer:
             continue
         normalized = normalize_home(os.path.expanduser(answer).rstrip("/"), home)
+        if not exists(localize_home(normalized, home)):
+            log("  ! %s は存在しません。このエントリはスキップします" % normalized)
+            continue
         pair = learn_prefix(raw, normalized)
+        if pair:
+            others = sorted(
+                {e.get("projectPath") for e in entries if e.get("projectPath")}
+                - asked
+            )
+            affected = [p for p in others if apply_path_map(p, {pair[0]: pair[1]}) != p]
+            if affected and not confirm(
+                "  同じ読み替え %s → %s を残り %d 件にも適用しますか? [Y/n]: "
+                % (pair[0], pair[1], len(affected))
+            ):
+                pair = None
         if pair:
             learned[pair[0]] = pair[1]
         else:
@@ -516,24 +544,25 @@ def _describe_mcp(entry):
     return "%s [%s]%s" % (entry["name"], entry.get("scope", "user"), suffix)
 
 
-def _diffs(manifest_dir, home, path_map, collect):
+def _diffs(manifest_dir, home, path_map, collect, exists=None):
     # manifest を先に読む。ディレクトリが無いときに claude CLI を呼ばずに済む。
     manifest_plugins, manifest_mcp = load_manifest(manifest_dir)
     local_plugins, local_mcp = collect(manifest_dir, home)
     plugin_diff = diff_entries(
-        local_plugins["plugins"], manifest_plugins["plugins"], plugin_key, home, path_map
+        local_plugins["plugins"], manifest_plugins["plugins"], plugin_key, home,
+        path_map, exists,
     )
     mcp_diff = diff_entries(
-        local_mcp["servers"], manifest_mcp["servers"], mcp_key, home, path_map
+        local_mcp["servers"], manifest_mcp["servers"], mcp_key, home, path_map, exists
     )
     return manifest_plugins, plugin_diff, mcp_diff
 
 
-def status_config(manifest_dir, home, log=print, collect=None):
+def status_config(manifest_dir, home, log=print, collect=None, exists=None):
     """ローカル状態と manifest の差分を表示する。"""
     collect = collect or collect_local
     path_map = load_path_map(manifest_dir)
-    _, plugin_diff, mcp_diff = _diffs(manifest_dir, home, path_map, collect)
+    _, plugin_diff, mcp_diff = _diffs(manifest_dir, home, path_map, collect, exists)
     for label, diff, describe in (
         ("plugins", plugin_diff, _describe_plugin),
         ("mcp", mcp_diff, _describe_mcp),
@@ -551,7 +580,7 @@ def status_config(manifest_dir, home, log=print, collect=None):
 
 def import_config(
     manifest_dir, home, dry_run=False, no_prompt=False,
-    environ=None, prompt=None, log=print, collect=None,
+    environ=None, prompt=None, confirm=None, log=print, collect=None, exists=None,
 ):
     """manifest の内容をこのマシンに導入する。追加のみで、削除はしない。"""
     collect = collect or collect_local
@@ -559,17 +588,21 @@ def import_config(
     interactive = not dry_run and not no_prompt and prompt is not None
     path_map = load_path_map(manifest_dir)
 
-    manifest_plugins, plugin_diff, mcp_diff = _diffs(manifest_dir, home, path_map, collect)
+    manifest_plugins, plugin_diff, mcp_diff = _diffs(
+        manifest_dir, home, path_map, collect, exists
+    )
 
     if interactive:
         missing = plugin_diff["project_missing"] + mcp_diff["project_missing"]
-        learned = resolve_missing_paths(missing, home, path_map, prompt)
+        learned = resolve_missing_paths(
+            missing, home, path_map, prompt, confirm=confirm, exists=exists, log=log
+        )
         if learned:
             path_map = dict(path_map)
             path_map.update(learned)
             save_path_map(manifest_dir, path_map)
             manifest_plugins, plugin_diff, mcp_diff = _diffs(
-                manifest_dir, home, path_map, collect
+                manifest_dir, home, path_map, collect, exists
             )
 
     failures = 0
@@ -625,13 +658,18 @@ def diff_entries(local, manifest, key_fn, home, path_map=None, exists=None):
 
     result = {"only_manifest": [], "only_local": [], "differs": [], "project_missing": []}
     for key, entry in manifest_by_key.items():
+        # ローカルにあるかを先に見る。既にあるものは導入しようがないので、
+        # projectPath の所在は関係ない。project_missing は「入れたいのに
+        # 作業ディレクトリが無い」エントリだけを指す。
+        if key in local_by_key:
+            if local_by_key[key] != entry:
+                result["differs"].append(entry)
+            continue
         target = resolved_project_path(entry, home, path_map)
         if target is not None and not exists(target):
             result["project_missing"].append(entry)
-        elif key not in local_by_key:
+        else:
             result["only_manifest"].append(entry)
-        elif local_by_key[key] != entry:
-            result["differs"].append(entry)
     for key, entry in local_by_key.items():
         if key not in manifest_by_key:
             result["only_local"].append(entry)
