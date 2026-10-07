@@ -508,7 +508,6 @@ class TestRunCommand(unittest.TestCase):
         lines = []
         ok = config.run_command(
             ["plugin", "install", "a@m"], dry_run=True, log=lines.append,
-            executable="claude-does-not-exist",
         )
         self.assertTrue(ok)
         self.assertIn("claude plugin install a@m", lines[0])

@@ -409,16 +409,11 @@ def resolve_missing_paths(entries, home, path_map, prompt):
 
 
 def run_command(argv, cwd=None, dry_run=False, executable="claude", log=print):
-    """claude CLI を 1 回実行する。失敗しても例外にせず False を返す。
-
-    dry-run のプレビューは常に実コマンド名 "claude" で表示する。executable は
-    実行時に差し替える注入点であり、テストが偽の実行ファイルを渡しても
-    プレビュー表示には影響しない。
-    """
-    if dry_run:
-        log("  [dry-run] claude %s" % " ".join(argv))
-        return True
+    """claude CLI を 1 回実行する。失敗しても例外にせず False を返す。"""
     shown = "%s %s" % (executable, " ".join(argv))
+    if dry_run:
+        log("  [dry-run] %s" % shown)
+        return True
     log("  %s" % shown)
     try:
         completed = subprocess.run([executable] + list(argv), cwd=cwd, check=False)
