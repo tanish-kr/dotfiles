@@ -9,3 +9,6 @@ nvim/.netrwhist
 !tmux/.tmux/plugins/tpm
 
 tmux-*.log
+
+__pycache__/
+*.pyc
