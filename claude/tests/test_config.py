@@ -240,5 +240,71 @@ class TestManifestIO(unittest.TestCase):
             self.assertIn("mcp.json", str(caught.exception))
 
 
+class TestPathMap(unittest.TestCase):
+    def test_apply_rewrites_matching_prefix(self):
+        mapping = {"__HOME__/workspace": "__HOME__/src"}
+        self.assertEqual(
+            config.apply_path_map("__HOME__/workspace/app", mapping),
+            "__HOME__/src/app",
+        )
+
+    def test_apply_passes_through_unmatched_path(self):
+        mapping = {"__HOME__/workspace": "__HOME__/src"}
+        self.assertEqual(config.apply_path_map("__HOME__/other/app", mapping), "__HOME__/other/app")
+
+    def test_apply_prefers_longest_match(self):
+        mapping = {
+            "__HOME__/workspace": "__HOME__/src",
+            "__HOME__/workspace/special": "__HOME__/elsewhere",
+        }
+        self.assertEqual(
+            config.apply_path_map("__HOME__/workspace/special/app", mapping),
+            "__HOME__/elsewhere/app",
+        )
+
+    def test_apply_does_not_match_partial_segment(self):
+        mapping = {"__HOME__/work": "__HOME__/src"}
+        self.assertEqual(
+            config.apply_path_map("__HOME__/workspace/app", mapping),
+            "__HOME__/workspace/app",
+        )
+
+    def test_apply_matches_whole_path(self):
+        mapping = {"__HOME__/workspace": "__HOME__/src"}
+        self.assertEqual(config.apply_path_map("__HOME__/workspace", mapping), "__HOME__/src")
+
+    def test_learn_prefix_strips_common_suffix(self):
+        self.assertEqual(
+            config.learn_prefix("__HOME__/workspace/app", "__HOME__/src/app"),
+            ("__HOME__/workspace", "__HOME__/src"),
+        )
+
+    def test_learn_prefix_handles_multi_segment_suffix(self):
+        self.assertEqual(
+            config.learn_prefix("__HOME__/workspace/team/app", "__HOME__/src/team/app"),
+            ("__HOME__/workspace", "__HOME__/src"),
+        )
+
+    def test_learn_prefix_returns_none_when_nothing_shared(self):
+        self.assertIsNone(config.learn_prefix("__HOME__/a", "__HOME__/b"))
+
+    def test_load_path_map_is_empty_when_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(config.load_path_map(Path(tmp)), {})
+
+    def test_save_then_load_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config.save_path_map(Path(tmp), {"__HOME__/workspace": "__HOME__/src"})
+            self.assertEqual(
+                config.load_path_map(Path(tmp)), {"__HOME__/workspace": "__HOME__/src"}
+            )
+
+    def test_load_path_map_raises_on_broken_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "path-map.json").write_text("{broken", encoding="utf-8")
+            with self.assertRaises(config.ClaudeCliError):
+                config.load_path_map(Path(tmp))
+
+
 if __name__ == "__main__":
     unittest.main()

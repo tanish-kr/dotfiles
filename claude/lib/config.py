@@ -234,6 +234,61 @@ def _read_json(path):
         raise ClaudeCliError("%s を JSON として読めません: %s" % (path, error)) from error
 
 
+PATH_MAP_NAME = "path-map.json"
+
+
+def load_path_map(manifest_dir):
+    """projectPath の読み替え表を読む。無ければ空。"""
+    path = Path(manifest_dir) / PATH_MAP_NAME
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ClaudeCliError("%s を JSON として読めません: %s" % (path, error)) from error
+
+
+def save_path_map(manifest_dir, mapping):
+    """読み替え表を保存する。再実行時に同じ質問を繰り返さないため。"""
+    manifest_dir = Path(manifest_dir)
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    _write_json(manifest_dir / PATH_MAP_NAME, mapping)
+
+
+def apply_path_map(path, mapping):
+    """読み替え表をパスに適用する。最長一致で 1 度だけ置き換える。"""
+    if not mapping:
+        return path
+    for old in sorted(mapping, key=len, reverse=True):
+        if path == old:
+            return mapping[old]
+        if path.startswith(old + "/"):
+            return mapping[old] + path[len(old):]
+    return path
+
+
+def learn_prefix(old, new):
+    """1 件の読み替えから共通プレフィックスの差を導く。
+
+    "__HOME__/workspace/<project>" -> "__HOME__/src/<project>" のように末尾が
+    一致していれば ("__HOME__/workspace", "__HOME__/src") を返す。
+    """
+    old_parts = old.split("/")
+    new_parts = new.split("/")
+    shared = 0
+    while (
+        shared < len(old_parts) - 1
+        and shared < len(new_parts) - 1
+        and old_parts[-1 - shared] == new_parts[-1 - shared]
+    ):
+        shared += 1
+    if shared == 0:
+        return None
+    return "/".join(old_parts[: len(old_parts) - shared]), "/".join(
+        new_parts[: len(new_parts) - shared]
+    )
+
+
 def load_manifest(manifest_dir):
     """manifest ディレクトリから plugins / mcp を読む。"""
     manifest_dir = Path(manifest_dir)
