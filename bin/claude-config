@@ -19,7 +19,13 @@ DEFAULT_DIR = Path.home() / ".claude-env"
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="Claude Code の MCP / plugin 設定を manifest と往復させる。",
-        epilog="manifest は転送しない。ディレクトリの運搬は利用者が行う。",
+        epilog=(
+            "manifest は転送しない。ディレクトリの運搬は利用者が行う。\n"
+            "env と headers の値は常に ${PLACEHOLDER} に置き換わるが、"
+            "url / command / args は実値のまま残る。\n"
+            "manifest を共有する前に中身を確認すること。"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

@@ -144,6 +144,25 @@ class TestBuildPluginsManifest(unittest.TestCase):
             {"name": "example-marketplace", "source": "github", "repo": "example-org/plugins"},
         )
 
+    def test_plugin_without_id_raises_readable_error(self):
+        with self.assertRaises(config.ClaudeCliError) as caught:
+            config.build_plugins_manifest([{"scope": "user"}], [], "/Users/alice")
+        self.assertIn("id", str(caught.exception))
+
+    def test_marketplace_without_identifier_raises_at_export(self):
+        # 識別子を落としたまま manifest に入ると、失敗するのは import 側のマシンになる。
+        with self.assertRaises(config.ClaudeCliError) as caught:
+            config.build_plugins_manifest(
+                [], [{"name": "orphan", "source": "github"}], "/Users/alice"
+            )
+        self.assertIn("orphan", str(caught.exception))
+        self.assertIn("repo/url/path", str(caught.exception))
+
+    def test_marketplace_without_name_raises_readable_error(self):
+        with self.assertRaises(config.ClaudeCliError) as caught:
+            config.build_plugins_manifest([], [{"source": "github"}], "/Users/alice")
+        self.assertIn("name", str(caught.exception))
+
     def test_marketplace_path_is_normalized(self):
         result = config.build_plugins_manifest(PLUGIN_LIST, MARKETPLACE_LIST, "/Users/alice")
         local = [m for m in result["marketplaces"] if m["name"] == "local-marketplace"][0]
@@ -177,6 +196,36 @@ class TestBuildMcpManifest(unittest.TestCase):
 
     def test_missing_claude_json_yields_no_servers(self):
         self.assertEqual(config.build_mcp_manifest({}, "/Users/alice", set()), {"servers": []})
+
+    def _config_of(self, server_config):
+        claude_json = {"mcpServers": {"svc": server_config}}
+        return config.build_mcp_manifest(claude_json, "/Users/alice", set())["servers"][0]["config"]
+
+    def test_unknown_key_is_placeheld_even_when_nested(self):
+        result = self._config_of({"type": "stdio", "oauth": {"client_secret": "real-secret"}})
+        self.assertEqual(result["oauth"], "${SVC_OAUTH}")
+
+    def test_unknown_scalar_key_is_placeheld(self):
+        result = self._config_of({"type": "stdio", "apiKey": "real-secret"})
+        self.assertEqual(result["apiKey"], "${SVC_APIKEY}")
+
+    def test_env_that_is_not_a_dict_is_placeheld_whole(self):
+        result = self._config_of({"type": "stdio", "env": [["TOKEN", "real-secret"]]})
+        self.assertEqual(result["env"], "${SVC_ENV}")
+
+    def test_headers_that_is_not_a_dict_is_placeheld_whole(self):
+        result = self._config_of({"type": "http", "headers": "Authorization: Bearer real"})
+        self.assertEqual(result["headers"], "${SVC_HEADERS}")
+
+    def test_known_keys_keep_real_values(self):
+        result = self._config_of({
+            "type": "stdio", "url": "https://mcp.example.com/mcp",
+            "command": "/Users/alice/bin/server", "args": ["--flag", "/Users/alice/data"],
+        })
+        self.assertEqual(result["type"], "stdio")
+        self.assertEqual(result["url"], "https://mcp.example.com/mcp")
+        self.assertEqual(result["command"], "__HOME__/bin/server")
+        self.assertEqual(result["args"], ["--flag", "__HOME__/data"])
 
 
 class TestExternalInputs(unittest.TestCase):
@@ -238,6 +287,70 @@ class TestManifestIO(unittest.TestCase):
             with self.assertRaises(config.ClaudeCliError) as caught:
                 config.load_manifest(Path(tmp))
             self.assertIn("mcp.json", str(caught.exception))
+
+
+class TestManifestSchema(unittest.TestCase):
+    def _load(self, tmp, plugins, mcp):
+        (Path(tmp) / "plugins.json").write_text(json.dumps(plugins), encoding="utf-8")
+        (Path(tmp) / "mcp.json").write_text(json.dumps(mcp), encoding="utf-8")
+        with self.assertRaises(config.ClaudeCliError) as caught:
+            config.load_manifest(Path(tmp))
+        return str(caught.exception)
+
+    def test_empty_objects_raise_naming_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            message = self._load(tmp, {}, {})
+            self.assertIn("plugins.json", message)
+            self.assertIn("plugins", message)
+
+    def test_missing_marketplaces_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            message = self._load(tmp, {"plugins": []}, {"servers": []})
+            self.assertIn("marketplaces", message)
+
+    def test_missing_servers_raises_naming_mcp_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            message = self._load(tmp, {"marketplaces": [], "plugins": []}, {})
+            self.assertIn("mcp.json", message)
+            self.assertIn("servers", message)
+
+    def test_non_list_value_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            message = self._load(
+                tmp, {"marketplaces": [], "plugins": {}}, {"servers": []}
+            )
+            self.assertIn("plugins", message)
+
+    def test_plugin_without_id_raises_naming_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            message = self._load(
+                tmp, {"marketplaces": [], "plugins": [{"scope": "user"}]}, {"servers": []}
+            )
+            self.assertIn("plugins.json", message)
+            self.assertIn("id", message)
+
+    def test_marketplace_without_name_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            message = self._load(
+                tmp, {"marketplaces": [{"source": "github"}], "plugins": []}, {"servers": []}
+            )
+            self.assertIn("plugins.json", message)
+            self.assertIn("name", message)
+
+    def test_server_without_name_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            message = self._load(
+                tmp, {"marketplaces": [], "plugins": []}, {"servers": [{"scope": "user"}]}
+            )
+            self.assertIn("mcp.json", message)
+            self.assertIn("name", message)
+
+    def test_valid_manifest_loads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            plugins = {"marketplaces": [], "plugins": [_plugin("a@m")]}
+            mcp = {"servers": [{"name": "docs", "scope": "user", "config": {}}]}
+            config.write_manifest(Path(tmp), plugins, mcp)
+            self.assertEqual(config.load_manifest(Path(tmp)), (plugins, mcp))
 
 
 class TestPathMap(unittest.TestCase):
@@ -416,12 +529,58 @@ class TestDiff(unittest.TestCase):
         self.assertEqual(len(result["differs"]), 1)
         self.assertEqual(result["only_manifest"], [])
 
-    def test_redacted_local_matches_placeheld_manifest(self):
-        # 両辺とも build_* を通した正規化後の形なので placeholder どうしが一致する。
-        server = {"name": "docs", "scope": "user",
-                  "config": {"headers": {"Authorization": "Bearer ${DOCS_AUTHORIZATION}"}}}
-        result = config.diff_entries([server], [dict(server)], config.mcp_key, "/Users/alice")
-        self.assertEqual(result["differs"], [])
+    def test_local_holding_real_token_equals_manifest_holding_placeholder(self):
+        # 設計の中核: 実トークンを持つローカル状態と placeholder を持つ manifest が
+        # 差分なしになる。両辺を build_* で manifest 空間に落としてから比べるため。
+        def claude_json(home):
+            return {
+                "mcpServers": {
+                    "docs": {"type": "http", "url": "https://mcp.example.com/mcp",
+                             "headers": {"Authorization": "Bearer real-token-value"}},
+                },
+                "projects": {
+                    "%s/workspace/app" % home: {
+                        "mcpServers": {
+                            "ci": {"type": "stdio", "command": "npx", "args": ["-y", "ci-mcp"],
+                                   "env": {"CI_TOKEN": "another-real-secret"}},
+                        },
+                    },
+                },
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # export 側のマシン
+            exported_plugins = config.build_plugins_manifest(
+                PLUGIN_LIST, MARKETPLACE_LIST, "/Users/alice"
+            )
+            exported_mcp = config.build_mcp_manifest(claude_json("/Users/alice"), "/Users/alice", set())
+            config.write_manifest(Path(tmp), exported_plugins, exported_mcp)
+            written = (Path(tmp) / "mcp.json").read_text(encoding="utf-8")
+            self.assertNotIn("real-token-value", written)
+            self.assertNotIn("another-real-secret", written)
+
+            manifest_plugins, manifest_mcp = config.load_manifest(Path(tmp))
+
+            # import 側のマシン。$HOME も実トークンも違うが、同じ正規化を通す。
+            local_plugins = config.build_plugins_manifest(
+                [dict(p, projectPath=p["projectPath"].replace("/Users/alice", "/Users/bob"))
+                 if p.get("projectPath") else dict(p) for p in PLUGIN_LIST],
+                [dict(m, path=m["path"].replace("/Users/alice", "/Users/bob"))
+                 if m.get("path") else dict(m) for m in MARKETPLACE_LIST],
+                "/Users/bob",
+            )
+            local_mcp = config.build_mcp_manifest(claude_json("/Users/bob"), "/Users/bob", set())
+
+            for local, manifest, key_fn in (
+                (local_plugins["plugins"], manifest_plugins["plugins"], config.plugin_key),
+                (local_mcp["servers"], manifest_mcp["servers"], config.mcp_key),
+            ):
+                result = config.diff_entries(
+                    local, manifest, key_fn, "/Users/bob", exists=lambda p: True
+                )
+                self.assertEqual(
+                    {name: entries for name, entries in result.items() if entries}, {}
+                )
 
     def test_missing_project_path_is_project_missing(self):
         entry = _plugin("a@m", scope="project", project="__HOME__/workspace/app")

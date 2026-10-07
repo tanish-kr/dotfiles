@@ -3,6 +3,17 @@
 manifest はマシン非依存であるべきなので、$HOME は __HOME__ トークンに
 正規化し、資格情報は ${PLACEHOLDER} に置き換えてから書き出す。
 
+ただし manifest は「資格情報が無いファイル」ではない。伏せる範囲は次のとおりで、
+これを誤解したまま持ち出さないこと。
+
+- env と headers の値は無条件で ${PLACEHOLDER} になる。既知のキー以外も値ごと
+  伏せるので、設定スキーマにキーが増えても既定で漏れない
+- url / command / args は設計上そのままの実値が残る。args は --api-key <値> の
+  ような形で資格情報を含みうる
+
+したがって manifest を共有する前には中身を目で確認する。資格情報を含むサーバは
+manifest から手で除外する運用とする。
+
 将来 PyPI パッケージとして公開する可能性がある。そのため、このモジュールの
 関数は argparse.Namespace を受け取らず、Path / str / bool といった素の値で
 引数を受ける。公開時に動かすのは bin/ 側の argparse 定義だけで済み、この
@@ -96,17 +107,31 @@ def build_plugins_manifest(plugin_list, marketplace_list, home):
     """
     marketplaces = []
     for entry in marketplace_list or []:
-        item = {"name": entry["name"], "source": entry.get("source")}
+        name = entry.get("name") if isinstance(entry, dict) else None
+        if not name:
+            raise ClaudeCliError(
+                "marketplace の一覧に name が無いエントリがあります: %r" % (entry,)
+            )
+        item = {"name": name, "source": entry.get("source")}
         for key in _MARKETPLACE_ID_KEYS:
             if entry.get(key):
                 item[key] = normalize_home(entry[key], home) if key == "path" else entry[key]
                 break
+        else:
+            # ここで止めないと、識別子を失った marketplace が manifest に入り、
+            # 失敗するのは import を走らせた別マシンになる。
+            raise ClaudeCliError(
+                "marketplace %s に repo/url/path がありません。export できません" % name
+            )
         marketplaces.append(item)
     marketplaces.sort(key=lambda m: m["name"])
 
     plugins = []
     for entry in plugin_list or []:
-        item = {"id": entry["id"], "scope": entry.get("scope", "user")}
+        identifier = entry.get("id") if isinstance(entry, dict) else None
+        if not identifier:
+            raise ClaudeCliError("plugin の一覧に id が無いエントリがあります: %r" % (entry,))
+        item = {"id": identifier, "scope": entry.get("scope", "user")}
         if entry.get("projectPath"):
             item["projectPath"] = normalize_home(entry["projectPath"], home)
         item["enabled"] = bool(entry.get("enabled"))
@@ -116,17 +141,35 @@ def build_plugins_manifest(plugin_list, marketplace_list, home):
     return {"marketplaces": marketplaces, "plugins": plugins}
 
 
+# 実値のまま manifest に残すキー。これ以外はすべて placeholder にする。
+_REAL_VALUE_KEYS = ("type", "url", "command", "args")
+
+
 def _redact_server(name, server_config, plain_keys, home):
+    """サーバ設定を manifest 空間へ落とす。既知のキー以外は値を伏せる。
+
+    分岐を網羅的にし、どの枝にも当たらない値は placeholder にする。CLI の
+    設定スキーマにキーが増えても、既定で伏せられるので秘密が漏れない。
+    """
     clean = {}
     for key, value in (server_config or {}).items():
-        if key == "headers" and isinstance(value, dict):
-            clean[key] = redact_headers(name, value)
-        elif key == "env" and isinstance(value, dict):
-            clean[key] = redact_env(name, value, plain_keys, home)
-        elif key == "args" and isinstance(value, list):
-            clean[key] = [normalize_home(v, home) for v in value]
-        else:
+        placeholder = "${%s}" % placeholder_name(name, key)
+        if key == "headers":
+            clean[key] = redact_headers(name, value) if isinstance(value, dict) else placeholder
+        elif key == "env":
+            clean[key] = (
+                redact_env(name, value, plain_keys, home)
+                if isinstance(value, dict) else placeholder
+            )
+        elif key == "args":
+            clean[key] = (
+                [normalize_home(v, home) for v in value]
+                if isinstance(value, list) else normalize_home(value, home)
+            )
+        elif key in _REAL_VALUE_KEYS:
             clean[key] = normalize_home(value, home)
+        else:
+            clean[key] = placeholder
     return clean
 
 
@@ -355,12 +398,35 @@ def learn_prefix(old, new):
     )
 
 
+def _require_records(payload, key, identifier, path):
+    """manifest の 1 セクションがリストで、各要素が識別子を持つことを確かめる。
+
+    ここで止めないと、壊れた manifest が差分計算の奥で KeyError になり、
+    どのファイルのどこが悪いのか分からないまま traceback で終わる。
+    """
+    records = payload.get(key) if isinstance(payload, dict) else None
+    if not isinstance(records, list):
+        raise ClaudeCliError("%s に %s のリストがありません" % (path, key))
+    for record in records:
+        if not isinstance(record, dict) or not record.get(identifier):
+            raise ClaudeCliError(
+                "%s の %s に %s が無いエントリがあります: %r" % (path, key, identifier, record)
+            )
+    return records
+
+
 def load_manifest(manifest_dir):
-    """manifest ディレクトリから plugins / mcp を読む。"""
+    """manifest ディレクトリから plugins / mcp を読む。形式も検査する。"""
     manifest_dir = Path(manifest_dir)
     if not manifest_dir.is_dir():
         raise ClaudeCliError("%s がありません。先に export を実行してください" % manifest_dir)
-    return _read_json(manifest_dir / "plugins.json"), _read_json(manifest_dir / "mcp.json")
+    plugins_path = manifest_dir / "plugins.json"
+    mcp_path = manifest_dir / "mcp.json"
+    plugins, mcp = _read_json(plugins_path), _read_json(mcp_path)
+    _require_records(plugins, "marketplaces", "name", plugins_path)
+    _require_records(plugins, "plugins", "id", plugins_path)
+    _require_records(mcp, "servers", "name", mcp_path)
+    return plugins, mcp
 
 
 def plugin_key(entry):
