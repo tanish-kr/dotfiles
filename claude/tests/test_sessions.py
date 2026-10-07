@@ -1,5 +1,8 @@
 import json
+import os
+import tarfile
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -96,6 +99,146 @@ class TestRewriteJsonlFile(unittest.TestCase):
             src.write_text("\n".join(json.dumps({"i": i}) for i in range(5)) + "\n", encoding="utf-8")
             sessions.rewrite_jsonl_file(src, dest, "/Users/alice", "/Users/bob")
             self.assertEqual(len(dest.read_text(encoding="utf-8").splitlines()), 5)
+
+
+def _make_projects(root, entries):
+    """entries: {相対パス: 内容} を projects ツリーとして作る。"""
+    for rel, content in entries.items():
+        path = Path(root) / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+
+class TestShouldInclude(unittest.TestCase):
+    def setUp(self):
+        self.all_ids = {"proj/aaa", "proj/bbb"}
+        self.keep_ids = {"proj/aaa"}
+
+    def test_keeps_selected_transcript(self):
+        self.assertTrue(sessions.should_include("proj/aaa.jsonl", self.all_ids, self.keep_ids))
+
+    def test_drops_unselected_transcript(self):
+        self.assertFalse(sessions.should_include("proj/bbb.jsonl", self.all_ids, self.keep_ids))
+
+    def test_keeps_sibling_dir_of_selected_transcript(self):
+        self.assertTrue(
+            sessions.should_include("proj/aaa/tool-results/x.json", self.all_ids, self.keep_ids)
+        )
+
+    def test_drops_sibling_dir_of_unselected_transcript(self):
+        self.assertFalse(
+            sessions.should_include("proj/bbb/tool-results/x.json", self.all_ids, self.keep_ids)
+        )
+
+    def test_keeps_memory_unconditionally(self):
+        self.assertTrue(
+            sessions.should_include("proj/memory/MEMORY.md", self.all_ids, self.keep_ids)
+        )
+
+    def test_keeps_session_aliases_unconditionally(self):
+        self.assertTrue(
+            sessions.should_include("proj/.session-aliases", self.all_ids, self.keep_ids)
+        )
+
+    def test_keeps_project_directory_itself(self):
+        self.assertTrue(sessions.should_include("proj", self.all_ids, self.keep_ids))
+
+    def test_distinguishes_same_uuid_across_projects(self):
+        all_ids = {"one/aaa", "two/aaa"}
+        keep_ids = {"one/aaa"}
+        self.assertTrue(sessions.should_include("one/aaa/sub/x", all_ids, keep_ids))
+        self.assertFalse(sessions.should_include("two/aaa/sub/x", all_ids, keep_ids))
+
+
+class TestExportSessions(unittest.TestCase):
+    def _tree(self, root):
+        _make_projects(root, {
+            "proj/aaa.jsonl": json.dumps({"cwd": "/Users/alice/app"}) + "\n",
+            "proj/bbb.jsonl": json.dumps({"cwd": "/Users/alice/app"}) + "\n",
+            "proj/aaa/tool-results/r.json": "{}",
+            "proj/bbb/tool-results/r.json": "{}",
+            "proj/memory/MEMORY.md": "- note\n",
+            "proj/.session-aliases": "alias\n",
+        })
+        old = time.time() - 30 * 86400
+        os.utime(Path(root) / "proj/bbb.jsonl", (old, old))
+
+    def _names(self, archive):
+        with tarfile.open(archive) as tar:
+            return {n[2:] if n.startswith("./") else n for n in tar.getnames()}
+
+    def test_day_filter_drops_old_transcript(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects = Path(tmp) / "projects"
+            projects.mkdir()
+            self._tree(projects)
+            archive, count = sessions.export_sessions(projects, Path(tmp) / "out", 7, "/Users/alice")
+            names = self._names(archive)
+            self.assertIn("proj/aaa.jsonl", names)
+            self.assertNotIn("proj/bbb.jsonl", names)
+            self.assertEqual(count, 1)
+
+    def test_day_filter_zero_keeps_everything(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects = Path(tmp) / "projects"
+            projects.mkdir()
+            self._tree(projects)
+            archive, count = sessions.export_sessions(projects, Path(tmp) / "out", 0, "/Users/alice")
+            names = self._names(archive)
+            self.assertIn("proj/bbb.jsonl", names)
+            self.assertEqual(count, 2)
+
+    def test_memory_is_included_even_when_transcript_is_filtered_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects = Path(tmp) / "projects"
+            projects.mkdir()
+            self._tree(projects)
+            archive, _ = sessions.export_sessions(projects, Path(tmp) / "out", 7, "/Users/alice")
+            self.assertIn("proj/memory/MEMORY.md", self._names(archive))
+
+    def test_sibling_dir_follows_its_transcript(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects = Path(tmp) / "projects"
+            projects.mkdir()
+            self._tree(projects)
+            archive, _ = sessions.export_sessions(projects, Path(tmp) / "out", 7, "/Users/alice")
+            names = self._names(archive)
+            self.assertIn("proj/aaa/tool-results/r.json", names)
+            self.assertNotIn("proj/bbb/tool-results/r.json", names)
+
+    def test_meta_records_home_and_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects = Path(tmp) / "projects"
+            projects.mkdir()
+            self._tree(projects)
+            archive, _ = sessions.export_sessions(projects, Path(tmp) / "out", 7, "/Users/alice")
+            with tarfile.open(archive) as tar:
+                meta = json.loads(tar.extractfile("meta.json").read().decode("utf-8"))
+            self.assertEqual(meta["home"], "/Users/alice")
+            self.assertEqual(meta["transcripts"], 1)
+
+    def test_meta_is_not_written_to_disk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects = Path(tmp) / "projects"
+            projects.mkdir()
+            self._tree(projects)
+            out = Path(tmp) / "out"
+            sessions.export_sessions(projects, out, 7, "/Users/alice")
+            self.assertEqual([p.name for p in out.iterdir() if p.name == "meta.json"], [])
+
+    def test_creates_output_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects = Path(tmp) / "projects"
+            projects.mkdir()
+            self._tree(projects)
+            out = Path(tmp) / "nested" / "out"
+            archive, _ = sessions.export_sessions(projects, out, 7, "/Users/alice")
+            self.assertTrue(archive.exists())
+
+    def test_raises_when_projects_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(sessions.SessionError):
+                sessions.export_sessions(Path(tmp) / "nope", Path(tmp) / "out", 7, "/Users/alice")
 
 
 if __name__ == "__main__":
