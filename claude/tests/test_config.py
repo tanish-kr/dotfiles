@@ -306,6 +306,83 @@ class TestPathMap(unittest.TestCase):
                 config.load_path_map(Path(tmp))
 
 
+class TestExpand(unittest.TestCase):
+    def test_substitutes_known_variable(self):
+        value, missing = config.expand_env_refs("Bearer ${TOK}", {"TOK": "secret"})
+        self.assertEqual(value, "Bearer secret")
+        self.assertEqual(missing, [])
+
+    def test_reports_unknown_variable_and_leaves_it(self):
+        value, missing = config.expand_env_refs("Bearer ${TOK}", {})
+        self.assertEqual(value, "Bearer ${TOK}")
+        self.assertEqual(missing, ["TOK"])
+
+    def test_passes_through_plain_text(self):
+        value, missing = config.expand_env_refs("https://mcp.example.com/mcp", {})
+        self.assertEqual(value, "https://mcp.example.com/mcp")
+        self.assertEqual(missing, [])
+
+    def test_expand_server_config_localizes_home_and_expands(self):
+        server_config = {
+            "type": "stdio", "command": "__HOME__/bin/server", "args": ["--flag"],
+            "env": {"TOKEN": "${TOK}"},
+        }
+        result, missing = config.expand_server_config(server_config, "/Users/bob", {"TOK": "s"})
+        self.assertEqual(result["command"], "/Users/bob/bin/server")
+        self.assertEqual(result["env"], {"TOKEN": "s"})
+        self.assertEqual(missing, [])
+
+    def test_expand_server_config_collects_all_missing_names(self):
+        server_config = {"type": "http", "url": "https://mcp.example.com/mcp",
+                         "headers": {"Authorization": "Bearer ${A}", "X-Key": "${B}"}}
+        _, missing = config.expand_server_config(server_config, "/Users/bob", {})
+        self.assertEqual(missing, ["A", "B"])
+
+
+class TestArgv(unittest.TestCase):
+    def test_marketplace_argv_uses_repo(self):
+        entry = {"name": "m", "source": "github", "repo": "example-org/plugins"}
+        self.assertEqual(
+            config.marketplace_argv(entry, "/Users/bob"),
+            ["plugin", "marketplace", "add", "example-org/plugins"],
+        )
+
+    def test_marketplace_argv_localizes_path(self):
+        entry = {"name": "m", "source": "path", "path": "__HOME__/dev/marketplace"}
+        self.assertEqual(
+            config.marketplace_argv(entry, "/Users/bob"),
+            ["plugin", "marketplace", "add", "/Users/bob/dev/marketplace"],
+        )
+
+    def test_plugin_argv_passes_id_and_scope(self):
+        self.assertEqual(
+            config.plugin_argv({"id": "a@m", "scope": "user", "enabled": True}),
+            ["plugin", "install", "a@m", "-s", "user", "-y"],
+        )
+
+    def test_plugin_disable_argv(self):
+        self.assertEqual(
+            config.plugin_disable_argv({"id": "a@m"}), ["plugin", "disable", "a@m"]
+        )
+
+    def test_mcp_argv_serialises_config_as_json(self):
+        entry = {"name": "docs", "scope": "user"}
+        server_config = {"type": "http", "url": "https://mcp.example.com/mcp"}
+        argv = config.mcp_argv(entry, server_config)
+        self.assertEqual(argv[:3], ["mcp", "add-json", "docs"])
+        self.assertEqual(json.loads(argv[3]), server_config)
+        self.assertEqual(argv[4:], ["-s", "user"])
+
+    def test_mcp_argv_has_no_transport_branching(self):
+        stdio = config.mcp_argv(
+            {"name": "ci", "scope": "local"},
+            {"type": "stdio", "command": "npx", "args": ["-y", "ci-mcp"]},
+        )
+        self.assertEqual(stdio[:3], ["mcp", "add-json", "ci"])
+        self.assertNotIn("--header", stdio)
+        self.assertNotIn("-e", stdio)
+
+
 def _plugin(id_, scope="user", project=None, enabled=True):
     entry = {"id": id_, "scope": scope, "enabled": enabled}
     if project:

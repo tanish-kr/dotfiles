@@ -21,6 +21,7 @@ HOME_TOKEN = "__HOME__"
 
 _NON_ALNUM = re.compile(r"[^A-Za-z0-9]+")
 _AUTH_SCHEMES = ("Bearer", "Basic", "Token")
+_ENV_REF = re.compile(r"\$\{([A-Z0-9_]+)\}")
 
 
 def normalize_home(value, home):
@@ -148,6 +149,70 @@ def build_mcp_manifest(claude_json, home, plain_keys):
             })
     servers.sort(key=lambda s: (s["scope"], s["name"], s.get("projectPath", "")))
     return {"servers": servers}
+
+
+def expand_env_refs(value, environ):
+    """${VAR} を environ の値で置き換え、未解決の変数名を返す。"""
+    if not isinstance(value, str):
+        return value, []
+    missing = []
+
+    def substitute(match):
+        name = match.group(1)
+        if name in environ:
+            return environ[name]
+        missing.append(name)
+        return match.group(0)
+
+    return _ENV_REF.sub(substitute, value), missing
+
+
+def expand_server_config(server_config, home, environ):
+    """manifest の config を、このマシンで実行できる形に戻す。"""
+    missing = []
+
+    def convert(value):
+        if isinstance(value, str):
+            expanded, gaps = expand_env_refs(localize_home(value, home), environ)
+            missing.extend(gaps)
+            return expanded
+        if isinstance(value, list):
+            return [convert(v) for v in value]
+        if isinstance(value, dict):
+            return {k: convert(v) for k, v in value.items()}
+        return value
+
+    return convert(server_config), sorted(set(missing))
+
+
+def marketplace_argv(entry, home):
+    """claude plugin marketplace add に渡す引数を作る。"""
+    for key in _MARKETPLACE_ID_KEYS:
+        if entry.get(key):
+            source = localize_home(entry[key], home) if key == "path" else entry[key]
+            return ["plugin", "marketplace", "add", source]
+    raise ClaudeCliError("marketplace %s に repo/url/path がありません" % entry.get("name"))
+
+
+def plugin_argv(entry):
+    """claude plugin install に渡す引数を作る。"""
+    return ["plugin", "install", entry["id"], "-s", entry.get("scope", "user"), "-y"]
+
+
+def plugin_disable_argv(entry):
+    return ["plugin", "disable", entry["id"]]
+
+
+def mcp_argv(entry, server_config):
+    """claude mcp add-json に渡す引数を作る。
+
+    config をそのまま JSON で渡すので、http か stdio かで分岐する必要がない。
+    """
+    return [
+        "mcp", "add-json", entry["name"],
+        json.dumps(server_config, ensure_ascii=False),
+        "-s", entry.get("scope", "user"),
+    ]
 
 
 def run_claude_json(args, executable="claude"):
