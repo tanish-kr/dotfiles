@@ -56,7 +56,7 @@ class TestPlaceholders(unittest.TestCase):
         self.assertEqual(result, {"PATH": "${OTHER_PATH}"})
 
     def test_redact_headers_keeps_auth_scheme(self):
-        result = config.redact_headers("github", {"Authorization": "Bearer ghp_realtoken"})
+        result = config.redact_headers("github", {"Authorization": "Bearer s3cr3t-token-value"})
         self.assertEqual(result, {"Authorization": "Bearer ${GITHUB_AUTHORIZATION}"})
 
     def test_redact_headers_replaces_whole_value_without_scheme(self):
