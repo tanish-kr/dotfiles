@@ -207,5 +207,38 @@ class TestExternalInputs(unittest.TestCase):
             self.assertEqual(config.load_plain_env(Path(tmp)), {"svc/PATH"})
 
 
+class TestManifestIO(unittest.TestCase):
+    def test_write_then_load_round_trips(self):
+        plugins = {"marketplaces": [], "plugins": [{"id": "a@m", "scope": "user", "enabled": True}]}
+        mcp = {"servers": [{"name": "docs", "scope": "user", "config": {"type": "http"}}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            config.write_manifest(Path(tmp), plugins, mcp)
+            self.assertEqual(config.load_manifest(Path(tmp)), (plugins, mcp))
+
+    def test_write_creates_missing_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "nested" / "dir"
+            config.write_manifest(target, {"marketplaces": [], "plugins": []}, {"servers": []})
+            self.assertTrue((target / "plugins.json").exists())
+
+    def test_written_json_ends_with_newline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config.write_manifest(Path(tmp), {"marketplaces": [], "plugins": []}, {"servers": []})
+            self.assertTrue((Path(tmp) / "mcp.json").read_text(encoding="utf-8").endswith("\n"))
+
+    def test_load_raises_when_directory_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(config.ClaudeCliError) as caught:
+                config.load_manifest(Path(tmp) / "missing")
+            self.assertIn("missing", str(caught.exception))
+
+    def test_load_raises_when_manifest_file_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "plugins.json").write_text("{}", encoding="utf-8")
+            with self.assertRaises(config.ClaudeCliError) as caught:
+                config.load_manifest(Path(tmp))
+            self.assertIn("mcp.json", str(caught.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

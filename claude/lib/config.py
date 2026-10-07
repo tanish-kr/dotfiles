@@ -205,3 +205,38 @@ def collect_local(manifest_dir, home):
     )
     mcp = build_mcp_manifest(read_claude_json(Path(home) / ".claude.json"), home, plain_keys)
     return plugins, mcp
+
+
+def _write_json(path, payload):
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+
+def write_manifest(manifest_dir, plugins, mcp):
+    """manifest を書き出す。ディレクトリが無ければ作る。"""
+    manifest_dir = Path(manifest_dir)
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+    for name, payload in (("plugins.json", plugins), ("mcp.json", mcp)):
+        path = manifest_dir / name
+        _write_json(path, payload)
+        written.append(path)
+    return written
+
+
+def _read_json(path):
+    if not path.exists():
+        raise ClaudeCliError("%s がありません。先に export を実行してください" % path)
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ClaudeCliError("%s を JSON として読めません: %s" % (path, error)) from error
+
+
+def load_manifest(manifest_dir):
+    """manifest ディレクトリから plugins / mcp を読む。"""
+    manifest_dir = Path(manifest_dir)
+    if not manifest_dir.is_dir():
+        raise ClaudeCliError("%s がありません。先に export を実行してください" % manifest_dir)
+    return _read_json(manifest_dir / "plugins.json"), _read_json(manifest_dir / "mcp.json")
