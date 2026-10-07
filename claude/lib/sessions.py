@@ -10,7 +10,9 @@
 
 import io
 import json
+import shutil
 import tarfile
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -151,3 +153,62 @@ def export_sessions(projects, out_dir, days, home, now=None):
             "transcripts": len(keep_ids),
         })
     return archive, len(keep_ids)
+
+
+def import_sessions(archive, projects, home, dry_run=False, force=False, log=print):
+    """アーカイブを projects ディレクトリへ復元する。
+
+    $HOME が記録時と同じならファイルをそのまま置くだけで、書き換えは走らない。
+    """
+    archive = Path(archive)
+    if not archive.is_file():
+        raise SessionError("アーカイブがありません: %s" % archive)
+    projects = Path(projects)
+    result = {"transcripts": 0, "files": 0, "skipped": 0}
+
+    with tempfile.TemporaryDirectory() as stage:
+        stage = Path(stage)
+        with tarfile.open(archive) as tar:
+            # filter="data" が展開先の外へ書き出すエントリを弾く。
+            tar.extractall(stage, filter="data")
+
+        meta_path = stage / META_NAME
+        if not meta_path.is_file():
+            raise SessionError(
+                "%s に meta.json がありません。このツールで作ったアーカイブではないようです"
+                % archive
+            )
+        old_home = json.loads(meta_path.read_text(encoding="utf-8")).get("home")
+        if not old_home:
+            raise SessionError("meta.json に home が記録されていません: %s" % archive)
+        rewriting = old_home != home
+
+        for src in sorted(stage.rglob("*")):
+            if src.is_dir():
+                continue
+            rel = src.relative_to(stage)
+            if rel.as_posix() == META_NAME:
+                continue
+            parts = list(rel.parts)
+            parts[0] = rewrite_dir_name(parts[0], old_home, home)
+            dest = projects.joinpath(*parts)
+
+            if dest.exists() and not force:
+                result["skipped"] += 1
+                log("  skipped (exists): %s" % Path(*parts).as_posix())
+                continue
+
+            if dry_run:
+                log("  [dry-run] %s" % Path(*parts).as_posix())
+            else:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                if rewriting and src.suffix == ".jsonl":
+                    rewrite_jsonl_file(src, dest, old_home, home)
+                    shutil.copystat(src, dest)
+                else:
+                    shutil.copy2(src, dest)
+            result["files"] += 1
+            if src.suffix == ".jsonl":
+                result["transcripts"] += 1
+
+    return result

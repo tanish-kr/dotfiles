@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import tarfile
@@ -239,6 +240,121 @@ class TestExportSessions(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(sessions.SessionError):
                 sessions.export_sessions(Path(tmp) / "nope", Path(tmp) / "out", 7, "/Users/alice")
+
+
+class TestImportSessions(unittest.TestCase):
+    def _archive(self, tmp, home="/Users/alice", with_meta=True):
+        projects = Path(tmp) / "projects"
+        projects.mkdir()
+        _make_projects(projects, {
+            "-Users-alice-workspace-app/aaa.jsonl":
+                json.dumps({"cwd": "/Users/alice/workspace/app", "type": "user"}) + "\n",
+            "-Users-alice-workspace-app/memory/MEMORY.md": "- note\n",
+        })
+        archive = Path(tmp) / "archive.tar.gz"
+        with tarfile.open(archive, "w:gz") as tar:
+            tar.add(projects, arcname=".")
+            if with_meta:
+                payload = json.dumps({"home": home, "transcripts": 1}).encode("utf-8")
+                info = tarfile.TarInfo("meta.json")
+                info.size = len(payload)
+                tar.addfile(info, io.BytesIO(payload))
+        return archive
+
+    def test_restores_transcript_and_memory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            target = Path(tmp) / "restored"
+            result = sessions.import_sessions(archive, target, "/Users/alice", log=lambda m: None)
+            self.assertEqual(result["transcripts"], 1)
+            self.assertTrue((target / "-Users-alice-workspace-app" / "aaa.jsonl").exists())
+            self.assertTrue((target / "-Users-alice-workspace-app" / "memory" / "MEMORY.md").exists())
+
+    def test_renames_directory_for_different_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            target = Path(tmp) / "restored"
+            sessions.import_sessions(archive, target, "/Users/bob", log=lambda m: None)
+            self.assertTrue((target / "-Users-bob-workspace-app" / "aaa.jsonl").exists())
+
+    def test_rewrites_cwd_for_different_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            target = Path(tmp) / "restored"
+            sessions.import_sessions(archive, target, "/Users/bob", log=lambda m: None)
+            line = (target / "-Users-bob-workspace-app" / "aaa.jsonl").read_text(encoding="utf-8")
+            self.assertEqual(json.loads(line)["cwd"], "/Users/bob/workspace/app")
+
+    def test_leaves_content_untouched_for_same_home(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            target = Path(tmp) / "restored"
+            sessions.import_sessions(archive, target, "/Users/alice", log=lambda m: None)
+            line = (target / "-Users-alice-workspace-app" / "aaa.jsonl").read_text(encoding="utf-8")
+            self.assertEqual(json.loads(line)["cwd"], "/Users/alice/workspace/app")
+
+    def test_meta_json_is_not_restored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            target = Path(tmp) / "restored"
+            sessions.import_sessions(archive, target, "/Users/alice", log=lambda m: None)
+            self.assertFalse((target / "meta.json").exists())
+
+    def test_existing_file_is_skipped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            target = Path(tmp) / "restored"
+            existing = target / "-Users-alice-workspace-app" / "aaa.jsonl"
+            existing.parent.mkdir(parents=True)
+            existing.write_text("original\n", encoding="utf-8")
+            result = sessions.import_sessions(archive, target, "/Users/alice", log=lambda m: None)
+            self.assertEqual(existing.read_text(encoding="utf-8"), "original\n")
+            self.assertEqual(result["skipped"], 1)
+
+    def test_force_overwrites_existing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            target = Path(tmp) / "restored"
+            existing = target / "-Users-alice-workspace-app" / "aaa.jsonl"
+            existing.parent.mkdir(parents=True)
+            existing.write_text("original\n", encoding="utf-8")
+            sessions.import_sessions(archive, target, "/Users/alice", force=True, log=lambda m: None)
+            self.assertNotEqual(existing.read_text(encoding="utf-8"), "original\n")
+
+    def test_dry_run_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            target = Path(tmp) / "restored"
+            result = sessions.import_sessions(
+                archive, target, "/Users/alice", dry_run=True, log=lambda m: None
+            )
+            self.assertEqual(result["transcripts"], 1)
+            self.assertFalse(target.exists())
+
+    def test_missing_meta_raises_readable_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp, with_meta=False)
+            with self.assertRaises(sessions.SessionError) as caught:
+                sessions.import_sessions(archive, Path(tmp) / "r", "/Users/alice", log=lambda m: None)
+            self.assertIn("meta.json", str(caught.exception))
+
+    def test_archive_cannot_escape_destination(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "evil.tar.gz"
+            payload = b"pwned\n"
+            with tarfile.open(archive, "w:gz") as tar:
+                info = tarfile.TarInfo("../escaped.txt")
+                info.size = len(payload)
+                tar.addfile(info, io.BytesIO(payload))
+                meta = json.dumps({"home": "/Users/alice"}).encode("utf-8")
+                meta_info = tarfile.TarInfo("meta.json")
+                meta_info.size = len(meta)
+                tar.addfile(meta_info, io.BytesIO(meta))
+            with self.assertRaises(Exception):
+                sessions.import_sessions(
+                    archive, Path(tmp) / "r", "/Users/alice", log=lambda m: None
+                )
+            self.assertFalse((Path(tmp) / "escaped.txt").exists())
 
 
 if __name__ == "__main__":
