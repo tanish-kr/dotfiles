@@ -1,4 +1,7 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import config
 
@@ -63,6 +66,145 @@ class TestPlaceholders(unittest.TestCase):
     def test_redact_headers_has_no_allowlist(self):
         result = config.redact_headers("svc", {"X-Region": "us-east-1"})
         self.assertEqual(result, {"X-Region": "${SVC_X_REGION}"})
+
+
+PLUGIN_LIST = [
+    {
+        "id": "tools@example-marketplace",
+        "version": "0.1.0",
+        "scope": "user",
+        "enabled": True,
+        "installPath": "/Users/alice/.claude/plugins/cache/x",
+        "installedAt": "2026-01-01T00:00:00Z",
+        "lastUpdated": "2026-01-01T00:00:00Z",
+    },
+    {
+        "id": "tools@example-marketplace",
+        "version": "0.1.0",
+        "scope": "project",
+        "enabled": False,
+        "installPath": "/Users/alice/.claude/plugins/cache/x",
+        "installedAt": "2026-01-01T00:00:00Z",
+        "lastUpdated": "2026-01-01T00:00:00Z",
+        "projectPath": "/Users/alice/workspace/app",
+    },
+]
+
+MARKETPLACE_LIST = [
+    {
+        "name": "example-marketplace",
+        "source": "github",
+        "repo": "example-org/plugins",
+        "installLocation": "/Users/alice/.claude/plugins/marketplaces/example-marketplace",
+    },
+    {"name": "local-marketplace", "source": "path", "path": "/Users/alice/dev/marketplace"},
+]
+
+CLAUDE_JSON = {
+    "mcpServers": {
+        "docs": {"type": "http", "url": "https://mcp.example.com/mcp",
+                 "headers": {"Authorization": "Bearer realtoken"}},
+    },
+    "projects": {
+        "/Users/alice/workspace/app": {
+            "mcpServers": {
+                "ci": {"type": "stdio", "command": "npx", "args": ["-y", "ci-mcp"],
+                       "env": {"CI_TOKEN": "realsecret"}},
+            },
+        },
+        "/Users/alice/workspace/empty": {},
+    },
+}
+
+
+class TestBuildPluginsManifest(unittest.TestCase):
+    def test_keeps_only_portable_fields(self):
+        result = config.build_plugins_manifest(PLUGIN_LIST, MARKETPLACE_LIST, "/Users/alice")
+        self.assertEqual(
+            result["plugins"][0],
+            {"id": "tools@example-marketplace", "scope": "project",
+             "projectPath": "__HOME__/workspace/app", "enabled": False},
+        )
+        self.assertNotIn("installPath", result["plugins"][0])
+        self.assertNotIn("version", result["plugins"][0])
+
+    def test_user_scoped_entry_has_no_project_path(self):
+        result = config.build_plugins_manifest(PLUGIN_LIST, MARKETPLACE_LIST, "/Users/alice")
+        user_entry = [p for p in result["plugins"] if p["scope"] == "user"][0]
+        self.assertNotIn("projectPath", user_entry)
+
+    def test_sorts_plugins_by_scope_then_id(self):
+        result = config.build_plugins_manifest(PLUGIN_LIST, MARKETPLACE_LIST, "/Users/alice")
+        self.assertEqual([p["scope"] for p in result["plugins"]], ["project", "user"])
+
+    def test_marketplace_keeps_source_identifier_only(self):
+        result = config.build_plugins_manifest(PLUGIN_LIST, MARKETPLACE_LIST, "/Users/alice")
+        self.assertEqual(
+            result["marketplaces"][0],
+            {"name": "example-marketplace", "source": "github", "repo": "example-org/plugins"},
+        )
+
+    def test_marketplace_path_is_normalized(self):
+        result = config.build_plugins_manifest(PLUGIN_LIST, MARKETPLACE_LIST, "/Users/alice")
+        local = [m for m in result["marketplaces"] if m["name"] == "local-marketplace"][0]
+        self.assertEqual(local["path"], "__HOME__/dev/marketplace")
+
+
+class TestBuildMcpManifest(unittest.TestCase):
+    def test_user_scope_server_from_top_level(self):
+        result = config.build_mcp_manifest(CLAUDE_JSON, "/Users/alice", set())
+        docs = [s for s in result["servers"] if s["name"] == "docs"][0]
+        self.assertEqual(docs["scope"], "user")
+        self.assertNotIn("projectPath", docs)
+        self.assertEqual(docs["config"]["url"], "https://mcp.example.com/mcp")
+        self.assertEqual(docs["config"]["headers"]["Authorization"], "Bearer ${DOCS_AUTHORIZATION}")
+
+    def test_local_scope_server_from_projects(self):
+        result = config.build_mcp_manifest(CLAUDE_JSON, "/Users/alice", set())
+        ci = [s for s in result["servers"] if s["name"] == "ci"][0]
+        self.assertEqual(ci["scope"], "local")
+        self.assertEqual(ci["projectPath"], "__HOME__/workspace/app")
+        self.assertEqual(ci["config"]["env"], {"CI_TOKEN": "${CI_CI_TOKEN}"})
+
+    def test_args_are_normalized_but_not_redacted(self):
+        result = config.build_mcp_manifest(CLAUDE_JSON, "/Users/alice", set())
+        ci = [s for s in result["servers"] if s["name"] == "ci"][0]
+        self.assertEqual(ci["config"]["args"], ["-y", "ci-mcp"])
+
+    def test_sorted_by_scope_then_name(self):
+        result = config.build_mcp_manifest(CLAUDE_JSON, "/Users/alice", set())
+        self.assertEqual([s["name"] for s in result["servers"]], ["ci", "docs"])
+
+    def test_missing_claude_json_yields_no_servers(self):
+        self.assertEqual(config.build_mcp_manifest({}, "/Users/alice", set()), {"servers": []})
+
+
+class TestExternalInputs(unittest.TestCase):
+    def test_read_claude_json_returns_empty_when_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(config.read_claude_json(Path(tmp) / "nope.json"), {})
+
+    def test_read_claude_json_raises_readable_error_on_broken_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            broken = Path(tmp) / ".claude.json"
+            broken.write_text("{not json", encoding="utf-8")
+            with self.assertRaises(config.ClaudeCliError) as caught:
+                config.read_claude_json(broken)
+            self.assertIn(str(broken), str(caught.exception))
+
+    def test_run_claude_json_raises_readable_error_when_cli_absent(self):
+        with self.assertRaises(config.ClaudeCliError) as caught:
+            config.run_claude_json(["plugin", "list", "--json"], executable="claude-does-not-exist")
+        self.assertIn("claude-does-not-exist", str(caught.exception))
+
+    def test_load_plain_env_is_empty_when_file_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(config.load_plain_env(Path(tmp)), set())
+
+    def test_load_plain_env_reads_list(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "plain-env.json").write_text(json.dumps(["svc/PATH"]), encoding="utf-8")
+            self.assertEqual(config.load_plain_env(Path(tmp)), {"svc/PATH"})
 
 
 if __name__ == "__main__":
