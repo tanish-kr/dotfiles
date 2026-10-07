@@ -12,6 +12,7 @@ manifest はマシン非依存であるべきなので、$HOME は __HOME__ ト�
 """
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -295,3 +296,46 @@ def load_manifest(manifest_dir):
     if not manifest_dir.is_dir():
         raise ClaudeCliError("%s がありません。先に export を実行してください" % manifest_dir)
     return _read_json(manifest_dir / "plugins.json"), _read_json(manifest_dir / "mcp.json")
+
+
+def plugin_key(entry):
+    return (entry["id"], entry.get("scope", "user"), entry.get("projectPath", ""))
+
+
+def mcp_key(entry):
+    return (entry["name"], entry.get("scope", "user"), entry.get("projectPath", ""))
+
+
+def resolved_project_path(entry, home, path_map):
+    """manifest の projectPath を、このマシンの実パスへ解決する。"""
+    raw = entry.get("projectPath")
+    if not raw:
+        return None
+    return localize_home(apply_path_map(raw, path_map or {}), home)
+
+
+def diff_entries(local, manifest, key_fn, home, path_map=None, exists=None):
+    """正規化済みの 2 つのエントリ列を比べる。
+
+    local 側は collect_local() を通した manifest 空間の形であることが前提。
+    実値と placeholder を直接比べると常に差分になるため、ここで生の状態を
+    受け取ってはならない。
+    """
+    if exists is None:
+        exists = os.path.isdir
+    local_by_key = {key_fn(e): e for e in local}
+    manifest_by_key = {key_fn(e): e for e in manifest}
+
+    result = {"only_manifest": [], "only_local": [], "differs": [], "project_missing": []}
+    for key, entry in manifest_by_key.items():
+        target = resolved_project_path(entry, home, path_map)
+        if target is not None and not exists(target):
+            result["project_missing"].append(entry)
+        elif key not in local_by_key:
+            result["only_manifest"].append(entry)
+        elif local_by_key[key] != entry:
+            result["differs"].append(entry)
+    for key, entry in local_by_key.items():
+        if key not in manifest_by_key:
+            result["only_local"].append(entry)
+    return result

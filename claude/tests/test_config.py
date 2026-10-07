@@ -306,5 +306,86 @@ class TestPathMap(unittest.TestCase):
                 config.load_path_map(Path(tmp))
 
 
+def _plugin(id_, scope="user", project=None, enabled=True):
+    entry = {"id": id_, "scope": scope, "enabled": enabled}
+    if project:
+        entry["projectPath"] = project
+    return entry
+
+
+class TestDiff(unittest.TestCase):
+    def test_entry_present_in_both_is_not_reported(self):
+        entries = [_plugin("a@m")]
+        result = config.diff_entries(entries, list(entries), config.plugin_key, "/Users/alice")
+        self.assertEqual(result["only_manifest"], [])
+        self.assertEqual(result["only_local"], [])
+        self.assertEqual(result["differs"], [])
+
+    def test_manifest_only_entry_is_reported(self):
+        result = config.diff_entries([], [_plugin("a@m")], config.plugin_key, "/Users/alice")
+        self.assertEqual([e["id"] for e in result["only_manifest"]], ["a@m"])
+
+    def test_local_only_entry_is_reported(self):
+        result = config.diff_entries([_plugin("a@m")], [], config.plugin_key, "/Users/alice")
+        self.assertEqual([e["id"] for e in result["only_local"]], ["a@m"])
+
+    def test_same_key_different_content_is_differs(self):
+        result = config.diff_entries(
+            [_plugin("a@m", enabled=True)],
+            [_plugin("a@m", enabled=False)],
+            config.plugin_key,
+            "/Users/alice",
+        )
+        self.assertEqual(len(result["differs"]), 1)
+        self.assertEqual(result["only_manifest"], [])
+
+    def test_redacted_local_matches_placeheld_manifest(self):
+        # 両辺とも build_* を通した正規化後の形なので placeholder どうしが一致する。
+        server = {"name": "docs", "scope": "user",
+                  "config": {"headers": {"Authorization": "Bearer ${DOCS_AUTHORIZATION}"}}}
+        result = config.diff_entries([server], [dict(server)], config.mcp_key, "/Users/alice")
+        self.assertEqual(result["differs"], [])
+
+    def test_missing_project_path_is_project_missing(self):
+        entry = _plugin("a@m", scope="project", project="__HOME__/workspace/app")
+        result = config.diff_entries(
+            [], [entry], config.plugin_key, "/Users/alice", exists=lambda p: False
+        )
+        self.assertEqual([e["id"] for e in result["project_missing"]], ["a@m"])
+        self.assertEqual(result["only_manifest"], [])
+
+    def test_existing_project_path_is_only_manifest(self):
+        entry = _plugin("a@m", scope="project", project="__HOME__/workspace/app")
+        result = config.diff_entries(
+            [], [entry], config.plugin_key, "/Users/alice", exists=lambda p: True
+        )
+        self.assertEqual([e["id"] for e in result["only_manifest"]], ["a@m"])
+        self.assertEqual(result["project_missing"], [])
+
+    def test_path_map_is_applied_before_existence_check(self):
+        entry = _plugin("a@m", scope="project", project="__HOME__/workspace/app")
+        seen = []
+
+        def exists(path):
+            seen.append(path)
+            return True
+
+        config.diff_entries(
+            [], [entry], config.plugin_key, "/Users/alice",
+            path_map={"__HOME__/workspace": "__HOME__/src"}, exists=exists,
+        )
+        self.assertEqual(seen, ["/Users/alice/src/app"])
+
+    def test_same_name_different_scope_are_distinct_keys(self):
+        local = [{"name": "docs", "scope": "user", "config": {}}]
+        manifest = [{"name": "docs", "scope": "local", "projectPath": "__HOME__/workspace/app",
+                     "config": {}}]
+        result = config.diff_entries(
+            local, manifest, config.mcp_key, "/Users/alice", exists=lambda p: True
+        )
+        self.assertEqual(len(result["only_manifest"]), 1)
+        self.assertEqual(len(result["only_local"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
