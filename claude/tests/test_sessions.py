@@ -361,6 +361,64 @@ class TestImportSessions(unittest.TestCase):
             self.assertEqual(result["transcripts"], 1)
             self.assertEqual(result["files"], 2)
 
+    def test_write_failure_is_counted_and_the_rest_is_restored(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            target = Path(tmp) / "restored"
+            original = sessions.shutil.copy2
+
+            def failing_copy2(src, dest, *args, **kwargs):
+                if str(src).endswith("aaa.jsonl"):
+                    raise OSError("書き込みに失敗しました")
+                return original(src, dest, *args, **kwargs)
+
+            lines = []
+            sessions.shutil.copy2 = failing_copy2
+            try:
+                result = sessions.import_sessions(
+                    archive, target, "/Users/alice", log=lines.append
+                )
+            finally:
+                sessions.shutil.copy2 = original
+            self.assertEqual(result["failed"], 1)
+            self.assertEqual(result["files"], 1)
+            self.assertEqual(result["transcripts"], 0)
+            self.assertFalse((target / "-Users-alice-workspace-app" / "aaa.jsonl").exists())
+            self.assertTrue((target / "-Users-alice-workspace-app" / "memory" / "MEMORY.md").exists())
+            self.assertTrue(any("aaa.jsonl" in line for line in lines))
+
+    def test_interrupted_write_leaves_no_partial_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            target = Path(tmp) / "restored"
+            original = sessions.rewrite_jsonl_file
+
+            def failing_rewrite(src, dest, old_home, new_home):
+                Path(dest).write_text("half a line", encoding="utf-8")
+                raise OSError("途中で落ちた")
+
+            sessions.rewrite_jsonl_file = failing_rewrite
+            try:
+                result = sessions.import_sessions(
+                    archive, target, "/Users/bob", log=lambda m: None
+                )
+            finally:
+                sessions.rewrite_jsonl_file = original
+            self.assertEqual(result["failed"], 1)
+            restored = target / "-Users-bob-workspace-app"
+            self.assertFalse((restored / "aaa.jsonl").exists())
+            self.assertEqual([p.name for p in restored.iterdir()], ["memory"])
+
+    def test_successful_restore_reports_no_failures(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = self._archive(tmp)
+            result = sessions.import_sessions(
+                archive, Path(tmp) / "restored", "/Users/bob", log=lambda m: None
+            )
+            self.assertEqual(result["failed"], 0)
+            restored = Path(tmp) / "restored" / "-Users-bob-workspace-app"
+            self.assertEqual(sorted(p.name for p in restored.iterdir()), ["aaa.jsonl", "memory"])
+
     def test_archive_cannot_escape_destination(self):
         with tempfile.TemporaryDirectory() as tmp:
             archive = Path(tmp) / "evil.tar.gz"
@@ -373,7 +431,7 @@ class TestImportSessions(unittest.TestCase):
                 meta_info = tarfile.TarInfo("meta.json")
                 meta_info.size = len(meta)
                 tar.addfile(meta_info, io.BytesIO(meta))
-            with self.assertRaises(Exception):
+            with self.assertRaises(tarfile.OutsideDestinationError):
                 sessions.import_sessions(
                     archive, Path(tmp) / "r", "/Users/alice", log=lambda m: None
                 )

@@ -61,13 +61,19 @@ def main(argv=None):
             args.archive, projects, home, dry_run=args.dry_run, force=args.force
         )
         print(
-            "Restored %d transcripts (%d files, %d skipped) into %s"
-            % (result["transcripts"], result["files"], result["skipped"], projects)
+            "%s %d transcripts (%d files, %d skipped) into %s"
+            % (
+                "Would restore" if args.dry_run else "Restored",
+                result["transcripts"], result["files"], result["skipped"], projects,
+            )
         )
+        if result["failed"]:
+            print("  失敗: %d 件（上の ! 行を参照）" % result["failed"], file=sys.stderr)
+            return 1
         print()
         print("記録されたディレクトリで再開する: cd <repo> && claude --resume")
         return 0
-    except sessions.SessionError as error:
+    except (sessions.SessionError, OSError) as error:
         print("error: %s" % error, file=sys.stderr)
         return 2
 

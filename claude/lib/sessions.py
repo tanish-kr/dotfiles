@@ -10,6 +10,7 @@
 
 import io
 import json
+import os
 import shutil
 import tarfile
 import tempfile
@@ -75,6 +76,28 @@ def rewrite_jsonl_file(src, dest, old_home, new_home):
         with open(dest, "w", encoding="utf-8", errors="surrogateescape", newline="") as writer:
             for line in reader:
                 writer.write(rewrite_jsonl_line(line, old_home, new_home))
+
+
+def place_file(src, dest, rewriting, old_home, new_home):
+    """復元先に一時名で書いてから os.replace で確定させる。
+
+    途中で落ちてもファイルは「無い」か「完全」かのどちらかになる。中途半端な
+    transcript が残ると、以降の復元は「既にある」と見なしてスキップしてしまい、
+    壊れたまま固定されてしまうためである。
+    """
+    handle, temp_name = tempfile.mkstemp(dir=str(dest.parent), prefix=".restore-", suffix=".part")
+    os.close(handle)
+    temp = Path(temp_name)
+    try:
+        if rewriting:
+            rewrite_jsonl_file(src, temp, old_home, new_home)
+            shutil.copystat(src, temp)
+        else:
+            shutil.copy2(src, temp)
+        os.replace(temp, dest)
+    finally:
+        if temp.exists():
+            temp.unlink()
 
 
 class SessionError(Exception):
@@ -164,7 +187,7 @@ def import_sessions(archive, projects, home, dry_run=False, force=False, log=pri
     if not archive.is_file():
         raise SessionError("アーカイブがありません: %s" % archive)
     projects = Path(projects)
-    result = {"transcripts": 0, "files": 0, "skipped": 0}
+    result = {"transcripts": 0, "files": 0, "skipped": 0, "failed": 0}
 
     with tempfile.TemporaryDirectory() as stage:
         stage = Path(stage)
@@ -201,12 +224,17 @@ def import_sessions(archive, projects, home, dry_run=False, force=False, log=pri
             if dry_run:
                 log("  [dry-run] %s" % Path(*parts).as_posix())
             else:
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                if rewriting and src.suffix == ".jsonl":
-                    rewrite_jsonl_file(src, dest, old_home, home)
-                    shutil.copystat(src, dest)
-                else:
-                    shutil.copy2(src, dest)
+                try:
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    place_file(
+                        src, dest, rewriting and src.suffix == ".jsonl", old_home, home
+                    )
+                except OSError as error:
+                    # 1 ファイルの失敗で復元全体を止めない。残りは復元し、
+                    # 件数を返して呼び出し側が報告できるようにする。
+                    result["failed"] += 1
+                    log("  ! 復元できません: %s (%s)" % (Path(*parts).as_posix(), error))
+                    continue
             result["files"] += 1
             # export と同じ定義で数える。セッション transcript は
             # <project>/<uuid>.jsonl のみで、その配下の subagent transcript は
