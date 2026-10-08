@@ -24,6 +24,8 @@
     "extensions.ignoreRecommendations": false,
     "editor.fontFamily": "Menlo, Monaco, 'Courier New', monospace",
     "editor.fontSize": 13,
+    "editor.experimentalEditContextEnabled": false,
+    "editor.editContext": false,
     "terminal.integrated.fontSize": 13,
     "editor.tabSize": 2,
     "editor.minimap.enabled": false,
@@ -49,7 +51,6 @@
     ],
     "files.eol": "\n",
     "git.autofetch": true,
-    "ruby.rubocop.useBundler": true,
     "sass.disableAutoIndent": true,
     "tabnine.experimentalAutoImports": true,
     "workbench.iconTheme": "material-icon-theme",
@@ -72,6 +73,7 @@
             "commands" : ["redo"]
         }
     ],
+    "terminal.integrated.shellIntegration.suggestEnabled": false,
     "terminal.integrated.profiles.osx": {
         "bash": {
             "path": "/usr/local/bin/bash",
@@ -109,7 +111,7 @@
     },
     "dart.flutterSdkPath": "/Users/tanish_kr/tool/flutter",
     "[ruby]": {
-        "editor.defaultFormatter": "Shopify.ruby-lsp",
+        "editor.defaultFormatter": "misogi.ruby-rubocop",
         "editor.formatOnSave": true,
         "editor.formatOnType": true,
         "editor.tabSize": 2,
@@ -121,5 +123,41 @@
             120
         ],
         "editor.semanticHighlighting.enabled": true
+    },
+    "ruby.rubocop.onSave": false,
+    "dotnetAcquisitionExtension.enableTelemetry": false,
+    "docker.extension.enableComposeLanguageServer": false,
+    "json.schemas": [
+
+    ],
+    "[dockercompose]": {
+        "editor.insertSpaces": true,
+        "editor.tabSize": 2,
+        "editor.autoIndent": "advanced",
+        "editor.quickSuggestions": {
+            "other": true,
+            "comments": false,
+            "strings": true
+        },
+        "editor.defaultFormatter": "redhat.vscode-yaml"
+    },
+    "[github-actions-workflow]": {
+        "editor.defaultFormatter": "redhat.vscode-yaml"
+    },
+    "editor.unicodeHighlight.ambiguousCharacters": false,
+    "explorer.compactFolders": false,
+    "gitlens.ai.model": "vscode",
+    "gitlens.ai.vscode.model": "copilotcli:",
+    "claudeCode.preferredLocation": "sidebar",
+    "claudeCode.disableLoginPrompt": true,
+    "files.associations": {
+        "*.rb": "ruby"
+    },
+    "github.copilot.enable": {
+        "*": true,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false,
+        "ruby": true
     }
 }

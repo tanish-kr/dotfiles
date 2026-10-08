@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Claude Code の MCP / plugin 設定を manifest と往復させる。
+
+処理本体は claude/lib/config.py にある。このファイルは引数の解釈だけを行う。
+"""
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "claude" / "lib"))
+
+import config  # noqa: E402
+
+DEFAULT_DIR = Path.home() / ".claude-env"
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Claude Code の MCP / plugin 設定を manifest と往復させる。",
+        epilog=(
+            "manifest は転送しない。ディレクトリの運搬は利用者が行う。\n"
+            "env と headers の値は常に ${PLACEHOLDER} に置き換わるが、"
+            "url / command / args は実値のまま残る。\n"
+            "manifest を共有する前に中身を確認すること。"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    for name, help_text in (
+        ("export", "このマシンの状態を manifest に書き出す"),
+        ("import", "manifest の内容をこのマシンに導入する（追加のみ）"),
+        ("status", "ローカル状態と manifest の差分を表示する"),
+    ):
+        child = sub.add_parser(name, help=help_text)
+        child.add_argument(
+            "--dir", type=Path, default=DEFAULT_DIR,
+            help="manifest ディレクトリ (default: %(default)s)",
+        )
+        if name == "import":
+            child.add_argument(
+                "-n", "--dry-run", action="store_true",
+                help="実行せず、行うコマンドを表示する",
+            )
+            child.add_argument(
+                "--no-prompt", action="store_true",
+                help="見つからない projectPath を対話的に尋ねない",
+            )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    home = os.path.expanduser("~")
+    try:
+        if args.command == "export":
+            for path in config.export_config(args.dir, home):
+                print("Wrote %s" % path)
+            return 0
+        if args.command == "status":
+            return config.status_config(args.dir, home)
+        prompt = input if sys.stdin.isatty() else None
+        return config.import_config(
+            args.dir, home,
+            dry_run=args.dry_run, no_prompt=args.no_prompt, prompt=prompt,
+        )
+    except config.ClaudeCliError as error:
+        print("error: %s" % error, file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""Claude Code の会話 transcript をアーカイブし、別マシンへ復元する。
+
+処理本体は claude/lib/sessions.py にある。このファイルは引数の解釈だけを行う。
+"""
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "claude" / "lib"))
+
+import sessions  # noqa: E402
+
+DEFAULT_OUT = Path.home() / "Desktop"
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Claude Code の会話 transcript をアーカイブし、復元する。",
+        epilog="transcript にはソースコードが含まれる。アーカイブはリポジトリの外に置くこと。",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    exporter = sub.add_parser("export", help="transcript をアーカイブする")
+    exporter.add_argument(
+        "-o", "--out", type=Path, default=DEFAULT_OUT,
+        help="アーカイブの出力先ディレクトリ (default: %(default)s)",
+    )
+    exporter.add_argument(
+        "-d", "--days", type=int, default=7,
+        help="この日数以内に更新された transcript だけを含める。0 で全件 (default: %(default)s)",
+    )
+
+    importer = sub.add_parser("import", help="アーカイブを復元する")
+    importer.add_argument("archive", type=Path, help="復元するアーカイブ")
+    importer.add_argument(
+        "-n", "--dry-run", action="store_true", help="書き込まず、復元される内容を表示する"
+    )
+    importer.add_argument(
+        "--force", action="store_true", help="既にあるファイルを上書きする"
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    home = os.path.expanduser("~")
+    projects = Path(os.environ.get("CLAUDE_HOME", Path(home) / ".claude")) / "projects"
+    try:
+        if args.command == "export":
+            archive, count = sessions.export_sessions(projects, args.out, args.days, home)
+            print("Wrote %s" % archive)
+            print("  transcripts: %d (days: %d)" % (count, args.days))
+            print("  size:        %.1f MB" % (archive.stat().st_size / 1024 / 1024))
+            print()
+            print("transcript にはソースコードが含まれる。リポジトリの外に置くこと。")
+            return 0
+        result = sessions.import_sessions(
+            args.archive, projects, home, dry_run=args.dry_run, force=args.force
+        )
+        print(
+            "%s %d transcripts (%d files, %d skipped) into %s"
+            % (
+                "Would restore" if args.dry_run else "Restored",
+                result["transcripts"], result["files"], result["skipped"], projects,
+            )
+        )
+        if result["failed"]:
+            print("  失敗: %d 件（上の ! 行を参照）" % result["failed"], file=sys.stderr)
+            return 1
+        print()
+        print("記録されたディレクトリで再開する: cd <repo> && claude --resume")
+        return 0
+    except (sessions.SessionError, OSError) as error:
+        print("error: %s" % error, file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

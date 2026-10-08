@@ -143,3 +143,5 @@ if [ -f '/Users/t_nishikiori/tool/google-cloud-sdk/path.zsh.inc' ]; then . '/Use
 if [ -f '/Users/t_nishikiori/tool/google-cloud-sdk/completion.zsh.inc' ]; then . '/Users/t_nishikiori/tool/google-cloud-sdk/completion.zsh.inc'; fi
 
 . /usr/local/opt/asdf/libexec/asdf.sh
+
+. "$HOME/.local/bin/env"
