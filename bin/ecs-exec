@@ -1,43 +1,81 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 PROFILE=$1
 CLUSTER_NAME=$2
-# SERVICE_NAME=$3
 CONTAINER_NAME=$3
 
+# exec エージェントが起動済みかの判定（デプロイ直後のタスクを除外するため）
+EXEC_READY="managedAgents[?name=='ExecuteCommandAgent' && lastStatus=='RUNNING']"
+
+# 候補から1つ選んで標準出力に返す。候補が1件なら自動で選ぶ
+choose() {
+  local prompt=$1
+  shift
+  if [ $# -eq 1 ]; then
+    echo "${prompt}: $1 (auto-selected)" >&2
+    echo "$1"
+    return
+  fi
+  local PS3="${prompt}: "
+  # 端末幅に応じた複数列表示をやめ、1件1行にする
+  local COLUMNS=1
+  local item
+  # 末尾に quit を付ける。候補名との衝突を避けるため番号で判定する
+  select item in "$@" "quit"; do
+    if [ -n "$item" ] && [ "$REPLY" = "$(($# + 1))" ]; then
+      echo "quit" >&2
+      return 1
+    elif [ -n "$item" ]; then
+      echo "$item"
+      return
+    fi
+  done
+  return 1
+}
+
 if [ -z "$PROFILE" ]; then
-  echo "must profile name"
-  exit 1
+  PROFILE=$(choose "profile" $(aws configure list-profiles))
 fi
 
 if [ -z "$CLUSTER_NAME" ]; then
-  echo "list clusters"
-  aws ecs list-clusters --profile ${PROFILE}
+  CLUSTERS=()
+  for arn in $(aws ecs list-clusters --profile "${PROFILE}" --query 'clusterArns[]' --output text); do
+    CLUSTERS+=("${arn##*/}")
+  done
+  if [ ${#CLUSTERS[@]} -eq 0 ]; then
+    echo "No clusters found" >&2
+    exit 1
+  fi
+  CLUSTER_NAME=$(choose "cluster" "${CLUSTERS[@]}")
+fi
+
+TASK_ARNS=$(aws ecs list-tasks --profile "${PROFILE}" --cluster "${CLUSTER_NAME}" --desired-status RUNNING --query 'taskArns[]' --output text)
+if [ -z "$TASK_ARNS" ]; then
+  echo "No running tasks found" >&2
   exit 1
 fi
 
-aws ecs list-tasks --profile ${PROFILE} --cluster ${CLUSTER_NAME} --desired-status RUNNING --query 'taskArns[*]' --output text
-
-TASK_ARNS=$(aws ecs list-tasks --profile ${PROFILE} --cluster ${CLUSTER_NAME} --desired-status RUNNING --query 'taskArns[*]' --output text | awk '{print $1}')
-
-echo $TASK_ARNS
-
-if [ -n "$TASK_ARNS" ]; then
-  FIRST_TASK_ARN=$(echo "$TASK_ARNS" | head -n1)
-else
-  echo "No tasks found"
+TASKS=()
+while IFS=$'\t' read -r arn group started_at; do
+  TASKS+=("$(printf '%s  %s  %s' "${arn##*/}" "${group}" "${started_at}")")
+done < <(aws ecs describe-tasks --profile "${PROFILE}" --cluster "${CLUSTER_NAME}" --tasks ${TASK_ARNS} \
+  --query "tasks[?enableExecuteCommand && containers[?${EXEC_READY}]].[taskArn, group, startedAt]" --output text)
+if [ ${#TASKS[@]} -eq 0 ]; then
+  echo "No exec-ready tasks found (deploying?)" >&2
   exit 1
 fi
+TASK=$(choose "task" "${TASKS[@]}")
+TASK_ID=${TASK%% *}
 
-TASK_ID=$(echo "${FIRST_TASK_ARN}" | cut -d / -f 3)
-
-echo "Task ID: ${TASK_ID}"
-
+CONTAINERS=($(aws ecs describe-tasks --profile "${PROFILE}" --cluster "${CLUSTER_NAME}" --tasks "${TASK_ID}" \
+  --query "tasks[0].containers[?${EXEC_READY}].name" --output text))
 if [ -z "$CONTAINER_NAME" ]; then
-  echo "container name lists"
-  aws ecs describe-tasks --profile ${PROFILE} --cluster ${CLUSTER_NAME} --task ${TASK_ID} --query 'tasks[].containers[].name'
-else
-  echo "exec bash in ecs"
-  aws ecs execute-command --profile ${PROFILE} --cluster ${CLUSTER_NAME} --task ${TASK_ID} --container ${CONTAINER_NAME} --interactive --command "/bin/sh" --debug
-  # aws ecs execute-command --profile ${PROFILE} --cluster ${CLUSTER_NAME} --task ${TASK_ID} --container ${CONTAINER_NAME} --interactive --command "bundle exec rails c"
+  CONTAINER_NAME=$(choose "container" "${CONTAINERS[@]}")
+elif [[ " ${CONTAINERS[*]} " != *" ${CONTAINER_NAME} "* ]]; then
+  echo "Container ${CONTAINER_NAME} is not exec-ready in task ${TASK_ID} (available: ${CONTAINERS[*]})" >&2
+  exit 1
 fi
+
+echo "exec ${PROFILE} / ${CLUSTER_NAME} / ${TASK_ID} / ${CONTAINER_NAME}"
+aws ecs execute-command --profile "${PROFILE}" --cluster "${CLUSTER_NAME}" --task "${TASK_ID}" --container "${CONTAINER_NAME}" --interactive --command "/bin/sh"
+# aws ecs execute-command --profile ${PROFILE} --cluster ${CLUSTER_NAME} --task ${TASK_ID} --container ${CONTAINER_NAME} --interactive --command "bundle exec rails c"
