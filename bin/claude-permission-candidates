@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""Claude Code の許可ルールの候補を集め、user scope の設定に反映する。
+
+処理本体は claude/lib/permission_candidates.py にある。このファイルは引数の解釈だけを行う。
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "claude" / "lib"))
+
+import permission_candidates as pc  # noqa: E402
+
+CLAUDE_DIR = Path.home() / ".claude"
+USER_SETTINGS = CLAUDE_DIR / "settings.json"
+BACKUP_DIR = CLAUDE_DIR / "permission-review" / "backups"
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Claude Code の許可ルールの候補を集め、user scope の設定に反映する。",
+        epilog="add / prune は書き換える前に %s へバックアップする。" % BACKUP_DIR,
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    scan = sub.add_parser("scan", help="候補と重複を JSON で出す")
+    scan.add_argument(
+        "-d", "--days", type=int, default=30,
+        help="この日数以内に更新された会話を対象にする (default: %(default)s)",
+    )
+    scan.add_argument(
+        "--min-sessions", type=int, default=2,
+        help="この数以上の会話で使われたものを候補にする (default: %(default)s)",
+    )
+
+    add = sub.add_parser("add", help="user scope の permissions.allow にルールを足す")
+    add.add_argument("rules", nargs="+")
+
+    prune = sub.add_parser("prune", help="settings.local.json の permissions.allow からルールを消す")
+    prune.add_argument("file", type=Path, help="対象の settings.local.json")
+    prune.add_argument("rules", nargs="+")
+    return parser.parse_args(argv)
+
+
+def scan(args):
+    home = str(Path.home())
+    history, session_count = pc.scan_history(CLAUDE_DIR / "projects", args.days, home)
+    repos = set()
+    for stat in history.values():
+        repos.update(stat["repos"])
+    local = pc.scan_local(pc.project_dirs(Path.home() / ".claude.json", repos))
+    user_perms = pc.load_permissions(USER_SETTINGS)
+    result = {
+        "days": args.days,
+        "sessions": session_count,
+        "user_settings": str(USER_SETTINGS),
+        "candidates": pc.build_candidates(history, local, user_perms, min_sessions=args.min_sessions),
+        "duplicates": pc.find_duplicates(local, user_perms.get("allow") or []),
+    }
+    json.dump(result, sys.stdout, ensure_ascii=False, indent=2)
+    print()
+
+
+def report(action, rules, saved):
+    if not rules:
+        print("変更はありません")
+        return
+    for rule in rules:
+        print("%s: %s" % (action, rule))
+    if saved:
+        print("バックアップ: %s" % saved)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    try:
+        if args.command == "scan":
+            scan(args)
+        elif args.command == "add":
+            report("追加", *pc.add_rules(USER_SETTINGS, args.rules, BACKUP_DIR))
+        else:
+            report("削除", *pc.prune_rules(args.file, args.rules, BACKUP_DIR))
+    except pc.CandidateError as e:
+        print("error: %s" % e, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
