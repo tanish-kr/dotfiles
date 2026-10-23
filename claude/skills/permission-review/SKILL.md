@@ -61,10 +61,22 @@ mkdir -p ~/.claude/permission-review
 
 - 質問文には、そのルールを許可すると何が確認なしで通るかを 1 行で書く。
   例: 「`git push *` を許可すると、force push や別リモートへの push も確認なしで通ります」
-- 選択肢は「追加しない（推奨）」と「user scope に追加」の 2 つ。
+- 選択肢は「追加しない（推奨）」と「user scope に追加」。危ない形をオプションやサブコマンドで切り出せるなら、「allow + 危険形を ask」も加える。
+  例: `git push` の `--force`、`curl` の `-d` / `-X` / `-o`、`find` の `-delete` / `-exec`、`docker run` の `-v`。
+- 似たものは multiSelect の 1 問にまとめてよい（例: `git switch` / `checkout` / `commit` / `stash`）。
+- `python3` のように使い方が幅広いものは、先に履歴から実際の使い方の内訳を調べて示し、実行対象を絞ったルール（`python3 -m unittest *` など）を提案する。
 - 12 件を聞いたら、残りも続けて聞くかどうかを確認する。
 
-「user scope に追加」が選ばれたものだけを `add` で追加する。
+選ばれたものだけを追加する。ask は allow より優先されるので、「allow + 危険形を ask」は次のように 2 回に分けて追加する。
+
+```bash
+~/.dotfiles/bin/claude-permission-candidates add 'Bash(git push *)'
+~/.dotfiles/bin/claude-permission-candidates add --to ask 'Bash(git push --force*)' 'Bash(git push * --force*)'
+```
+
+オプションは先頭にも途中にも来るので、ask は「`<cmd> <opt>*`」と「`<cmd> * <opt>*`」の 2 本を入れる。
+
+ask に「`cp *`」のような広いルールを入れると、同じコマンドの allow（例: scratchpad 向けの `cp * /private/tmp/claude-*`）まで打ち消される。既定で確認になるものは、ask に入れない。
 
 ## 5. 重複を掃除する
 

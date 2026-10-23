@@ -22,6 +22,9 @@ class TestSplitSegments(unittest.TestCase):
     def test_keeps_quoted_operators(self):
         self.assertEqual(keys("echo 'a && b' && git log"), ["echo", "git log"])
 
+    def test_joins_line_continuations(self):
+        self.assertEqual(keys("gh pr create \\\n  --title x \\\n  --body-file b"), ["gh pr create"])
+
     def test_heredoc_uses_first_line_only(self):
         self.assertEqual(keys("python3 - <<'EOF'\nimport os\nEOF"), ["python3"])
 
@@ -59,6 +62,9 @@ class TestCommandKey(unittest.TestCase):
 
     def test_rejects_non_command(self):
         self.assertIsNone(pc.command_key(["$(pwd)/x"]))
+
+    def test_rejects_option_fragment(self):
+        self.assertIsNone(pc.command_key(["-name", "*.rb"]))
 
     def test_git_global_flag(self):
         self.assertEqual(pc.command_key(["git", "--no-pager", "diff"]), "git diff")
@@ -180,6 +186,15 @@ class TestEdit(unittest.TestCase):
             self.assertEqual(data["permissions"]["allow"], ["WebSearch", "Bash(git log *)"])
             self.assertEqual(json.loads(saved.read_text())["permissions"]["allow"], ["WebSearch"])
 
+    def test_add_to_ask(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Path(tmp) / "settings.json"
+            settings.write_text(json.dumps({"permissions": {"allow": ["Bash(git push *)"]}}))
+            pc.add_rules(settings, ["Bash(git push --force*)"], Path(tmp) / "bk", kind="ask")
+            data = json.loads(settings.read_text())
+            self.assertEqual(data["permissions"]["allow"], ["Bash(git push *)"])
+            self.assertEqual(data["permissions"]["ask"], ["Bash(git push --force*)"])
+
     def test_add_creates_missing_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             settings = Path(tmp) / "settings.json"
@@ -205,6 +220,14 @@ class TestEdit(unittest.TestCase):
             self.assertEqual(removed, ["b"])
             self.assertEqual(data["permissions"], {"allow": ["a", "c"], "deny": ["d"]})
             self.assertIsNotNone(saved)
+
+    def test_backups_in_same_second_do_not_collide(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Path(tmp) / "settings.json"
+            settings.write_text("{}")
+            first = pc.backup(settings, Path(tmp) / "bk")
+            second = pc.backup(settings, Path(tmp) / "bk")
+            self.assertNotEqual(first, second)
 
     def test_broken_json_raises(self):
         with tempfile.TemporaryDirectory() as tmp:

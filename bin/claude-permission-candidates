@@ -35,7 +35,11 @@ def parse_args(argv=None):
         help="この数以上の会話で使われたものを候補にする (default: %(default)s)",
     )
 
-    add = sub.add_parser("add", help="user scope の permissions.allow にルールを足す")
+    add = sub.add_parser("add", help="user scope の permissions にルールを足す")
+    add.add_argument(
+        "--to", choices=("allow", "ask"), default="allow",
+        help="追加先。ask は allow より優先され、毎回確認になる (default: %(default)s)",
+    )
     add.add_argument("rules", nargs="+")
 
     prune = sub.add_parser("prune", help="settings.local.json の permissions.allow からルールを消す")
@@ -79,7 +83,8 @@ def main(argv=None):
         if args.command == "scan":
             scan(args)
         elif args.command == "add":
-            report("追加", *pc.add_rules(USER_SETTINGS, args.rules, BACKUP_DIR))
+            added, saved = pc.add_rules(USER_SETTINGS, args.rules, BACKUP_DIR, kind=args.to)
+            report("追加 (%s)" % args.to, added, saved)
         else:
             report("削除", *pc.prune_rules(args.file, args.rules, BACKUP_DIR))
     except pc.CandidateError as e:

@@ -52,6 +52,9 @@ def split_segments(command):
     ヒアドキュメントの本文はコマンドではないので、<< を含むなら 1 行目だけを見る。
     解釈できないもの (閉じていない引用符など) は空を返す。
     """
+    # 行末の \ による継続行は 1 行につなげる。つなげないと --body-file などが
+    # 別のコマンドとして数えられる。
+    command = command.replace("\\\n", " ")
     if "<<" in command:
         command = command.splitlines()[0] if command.strip() else ""
     lexer = shlex.shlex(command, posix=True, punctuation_chars="();<>|&\n")
@@ -85,7 +88,8 @@ def command_key(tokens):
     while options is not None and len(tokens) > 1 and tokens[1].startswith("-"):
         del tokens[1:3 if tokens[1] in options else 2]
     # リダイレクト (2>/dev/null など) は SUBCOMMAND_RE に合わないので、ここで除く必要はない。
-    if not tokens or not COMMAND_RE.match(tokens[0]):
+    # "-" で始まるのは、find の \( ... \) などで区切られたオプションの断片。
+    if not tokens or tokens[0].startswith("-") or not COMMAND_RE.match(tokens[0]):
         return None
     words = [tokens[0]]
     depth = SUBCOMMAND_DEPTH.get(tokens[0], 0)
@@ -282,7 +286,7 @@ def backup(path, backup_dir):
         return None
     backup_dir = Path(backup_dir)
     backup_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
     dest = backup_dir / ("%s-%s-%s" % (stamp, path.parent.parent.name or "root", path.name))
     shutil.copy2(str(path), str(dest))
     return dest
@@ -306,15 +310,19 @@ def _save(path, data):
     os.replace(str(tmp), str(path))
 
 
-def add_rules(settings_path, rules, backup_dir):
-    """settings.json の permissions.allow にルールを足す。既にあるものは足さない。"""
+def add_rules(settings_path, rules, backup_dir, kind="allow"):
+    """settings.json の permissions.<kind> にルールを足す。既にあるものは足さない。
+
+    ask は allow より優先されるので、allow で広く通したうえで危ない形だけを
+    ask に入れて毎回確認させる使い方ができる。
+    """
     data = _load(settings_path)
-    allow = data.setdefault("permissions", {}).setdefault("allow", [])
-    added = [r for r in rules if r not in allow]
+    target = data.setdefault("permissions", {}).setdefault(kind, [])
+    added = [r for r in rules if r not in target]
     if not added:
         return [], None
     saved = backup(settings_path, backup_dir)
-    allow.extend(added)
+    target.extend(added)
     Path(settings_path).parent.mkdir(parents=True, exist_ok=True)
     _save(settings_path, data)
     return added, saved
