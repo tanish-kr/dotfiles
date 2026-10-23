@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""直近の Claude Code の会話のうち、open な Issue に紐づくものを Markdown にする。
+
+処理本体は claude/lib/weekly_review.py にある。このファイルは引数の解釈だけを行う。
+"""
+
+import argparse
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "claude" / "lib"))
+
+import weekly_review  # noqa: E402
+
+PROJECTS = Path.home() / ".claude" / "projects"
+DEFAULT_OUT = Path.home() / ".claude" / "weekly-review"
+# launchd からは asdf の python が見えないので、常にあるシステムの python で動かす。
+AGENT_PYTHON = "/usr/bin/python3"
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="直近の Claude Code の会話のうち、open な Issue に紐づくものを Markdown にする。",
+        epilog="出力には会話の抜粋が含まれる。リポジトリの外に置くこと。",
+    )
+    sub = parser.add_subparsers(dest="command")
+
+    runner = sub.add_parser("run", help="一覧を作る (既定)")
+    install = sub.add_parser("install-agent", help="launchd に週次実行を登録する")
+    for p in (runner, install):
+        p.add_argument(
+            "-o", "--out", type=Path, default=DEFAULT_OUT,
+            help="出力先ディレクトリ (default: %(default)s)",
+        )
+        p.add_argument(
+            "-d", "--days", type=int, default=7,
+            help="この日数以内に更新された会話を対象にする (default: %(default)s)",
+        )
+    runner.add_argument("--notify", action="store_true", help="書き出し後に macOS の通知を出す")
+    install.add_argument(
+        "--weekday", type=int, default=1, help="実行する曜日。0=日曜 (default: %(default)s)"
+    )
+    install.add_argument("--at", default="09:00", help="実行時刻 HH:MM (default: %(default)s)")
+
+    sub.add_parser("uninstall-agent", help="launchd から週次実行を外す")
+
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # サブコマンドを省いたら run とみなす。
+    if not argv or (argv[0].startswith("-") and argv[0] not in ("-h", "--help")):
+        argv = ["run"] + argv
+    return parser.parse_args(argv)
+
+
+def run(args):
+    now = datetime.now()
+    sessions = weekly_review.collect_sessions(PROJECTS, args.days)
+    groups = weekly_review.group_by_issue(sessions)
+    text = weekly_review.render_markdown(groups, now, args.days)
+    path = weekly_review.write_report(text, args.out, now)
+    print(path)
+    if args.notify:
+        weekly_review.notify("作業途中の Issue: %d 件。/last-week で確認できます。" % len(groups))
+
+
+def install(args):
+    hour, minute = (int(x) for x in args.at.split(":"))
+    program = [
+        AGENT_PYTHON, str(Path(__file__).resolve()),
+        "run", "--notify", "--out", str(args.out), "--days", str(args.days),
+    ]
+    definition = weekly_review.build_agent(
+        program, args.weekday, hour, minute, args.out / "agent.log"
+    )
+    path = weekly_review.agent_path(Path.home())
+    weekly_review.install_agent(definition, path)
+    print("登録しました: %s" % path)
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    try:
+        if args.command == "install-agent":
+            install(args)
+        elif args.command == "uninstall-agent":
+            weekly_review.uninstall_agent(weekly_review.agent_path(Path.home()))
+            print("外しました")
+        else:
+            run(args)
+    except weekly_review.ReviewError as e:
+        print("error: %s" % e, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
