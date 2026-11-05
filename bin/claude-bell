@@ -1,0 +1,9 @@
+#!/bin/sh
+# Claude Code の hook から呼ばれ、Claude が動いている tmux pane にベルを送る。
+# tmux がその window に bell フラグを立て、status bar の window 一覧が
+# window-status-bell-style の色になる。tmux の外で動いている場合は何もしない。
+
+[ -n "$TMUX_PANE" ] || exit 0
+tty=$(tmux display-message -p -t "$TMUX_PANE" '#{pane_tty}' 2>/dev/null) || exit 0
+[ -n "$tty" ] && printf '\a' 2>/dev/null >"$tty"
+exit 0
