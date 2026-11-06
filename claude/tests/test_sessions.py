@@ -321,6 +321,21 @@ class TestImportSessions(unittest.TestCase):
             sessions.import_sessions(archive, target, "/Users/alice", force=True, log=lambda m: None)
             self.assertNotEqual(existing.read_text(encoding="utf-8"), "original\n")
 
+    def _archive_with(self, tmp, info):
+        archive = Path(tmp) / "evil.tar.gz"
+        with tarfile.open(archive, "w:gz") as tar:
+            tar.addfile(info, io.BytesIO(b"x" * info.size))
+        return archive
+
+    def test_rejects_absolute_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            info = tarfile.TarInfo("link")
+            info.type = tarfile.SYMTYPE
+            info.linkname = "/etc/passwd"
+            archive = self._archive_with(tmp, info)
+            with self.assertRaises((sessions.SessionError, tarfile.TarError)):
+                sessions.import_sessions(archive, Path(tmp) / "restored", "/Users/alice", log=lambda m: None)
+
     def test_dry_run_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             archive = self._archive(tmp)
@@ -431,7 +446,8 @@ class TestImportSessions(unittest.TestCase):
                 meta_info = tarfile.TarInfo("meta.json")
                 meta_info.size = len(meta)
                 tar.addfile(meta_info, io.BytesIO(meta))
-            with self.assertRaises(tarfile.OutsideDestinationError):
+            # filter="data" のある版は tarfile の例外、ない版は自前検査の SessionError。
+            with self.assertRaises((sessions.SessionError, tarfile.TarError)):
                 sessions.import_sessions(
                     archive, Path(tmp) / "r", "/Users/alice", log=lambda m: None
                 )

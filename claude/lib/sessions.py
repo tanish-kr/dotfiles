@@ -104,6 +104,26 @@ class SessionError(Exception):
     """アーカイブまたは transcript ディレクトリを扱えなかった。"""
 
 
+def _safe_extractall(tar, dest):
+    """展開先の外へ書き出すエントリを弾いて展開する。
+
+    filter="data" は 3.12 と 3.9.17 などのバックポートにしかない。
+    macOS 付属の 3.9.6 では同じ検査を自前で行う。
+    """
+    if hasattr(tarfile, "data_filter"):
+        tar.extractall(dest, filter="data")
+        return
+    root = os.path.realpath(dest)
+    members = tar.getmembers()
+    for member in members:
+        if not (member.isfile() or member.isdir()):
+            raise SessionError("通常ファイル以外のエントリは展開しません: %s" % member.name)
+        target = os.path.realpath(os.path.join(root, member.name))
+        if os.path.commonpath([root, target]) != root:
+            raise SessionError("展開先の外を指すエントリがあります: %s" % member.name)
+    tar.extractall(dest, members=members)
+
+
 def scan_transcripts(projects, days, now=None):
     """transcript の id 集合を 2 つ返す。
 
@@ -192,8 +212,7 @@ def import_sessions(archive, projects, home, dry_run=False, force=False, log=pri
     with tempfile.TemporaryDirectory() as stage:
         stage = Path(stage)
         with tarfile.open(archive) as tar:
-            # filter="data" が展開先の外へ書き出すエントリを弾く。
-            tar.extractall(stage, filter="data")
+            _safe_extractall(tar, stage)
 
         meta_path = stage / META_NAME
         if not meta_path.is_file():
